@@ -11,6 +11,7 @@ local Log         = StellarLoot.Log
 local Events = {
     pendingRolls = {},     -- [rollID] = { itemLink = , scheduledAt = , safetyTimer = }
     pendingByItemID = {},  -- [itemID] = { [rollID] = true } awaiting GET_ITEM_INFO_RECEIVED
+    confirmableRolls = {}, -- [rollID] = true for rolls the addon submitted; gates auto-confirm of the BoP popup
 }
 StellarLoot.Events = Events
 
@@ -42,6 +43,7 @@ local function scheduleRoll(rollID, action, itemLink)
             -- nil action = let user click manually (master toggle off)
             if not cfg.testMode then
                 RollOnLoot(rollID, rollType)
+                Events.confirmableRolls[rollID] = true
             end
         end
         Events.pendingRolls[rollID] = nil
@@ -113,10 +115,20 @@ end
 
 local function onCancelLootRoll(rollID)
     Events.pendingRolls[rollID] = nil
+    Events.confirmableRolls[rollID] = nil
     -- Also clean up pendingByItemID entries
     for itemID, rolls in pairs(Events.pendingByItemID) do
         rolls[rollID] = nil
         if not next(rolls) then Events.pendingByItemID[itemID] = nil end
+    end
+end
+
+local function onConfirmLootRoll(rollID, rollType)
+    -- Only auto-confirm the BoP popup for rolls this addon submitted; leave
+    -- unrelated bind confirmations (e.g. picking up items not rolled on) alone.
+    if Events.confirmableRolls[rollID] then
+        ConfirmLootRoll(rollID, rollType)
+        Events.confirmableRolls[rollID] = nil
     end
 end
 
@@ -137,6 +149,7 @@ end
 
 frame:RegisterEvent("START_LOOT_ROLL")
 frame:RegisterEvent("CANCEL_LOOT_ROLL")
+frame:RegisterEvent("CONFIRM_LOOT_ROLL")
 frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 frame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
@@ -150,6 +163,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
         onStartLootRoll(arg1, arg2, arg3)
     elseif event == "CANCEL_LOOT_ROLL" then
         onCancelLootRoll(arg1)
+    elseif event == "CONFIRM_LOOT_ROLL" then
+        onConfirmLootRoll(arg1, arg2)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         onItemInfoReceived(arg1, arg2)
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
