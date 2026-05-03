@@ -1,23 +1,31 @@
--- AutoRoll/PlayerState.lua
+-- StellarLoot/PlayerState.lua
 -- Cached snapshot of player class, spec, primary stat, enchanting skill, and
 -- equipped item levels per slot. Refreshed on relevant events.
 
-local Data = AutoRoll.Data
+local Data = StellarLoot.Data
 
 -- Compat: spec info was moved to C_SpecializationInfo in newer clients.
-local function getSpecIndex()
+local function getSpecIndex(group)
     if C_SpecializationInfo and C_SpecializationInfo.GetSpecialization then
-        return C_SpecializationInfo.GetSpecialization()
+        return C_SpecializationInfo.GetSpecialization(false, false, group)
     end
-    if _G.GetSpecialization then return _G.GetSpecialization() end
+    if _G.GetSpecialization then return _G.GetSpecialization(false, false, group) end
     return nil
 end
 
-local function getSpecInfo(idx)
+local function getSpecInfo(idx, group)
     if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
-        return C_SpecializationInfo.GetSpecializationInfo(idx)
+        return C_SpecializationInfo.GetSpecializationInfo(idx, false, false, group)
     end
-    if _G.GetSpecializationInfo then return _G.GetSpecializationInfo(idx) end
+    if _G.GetSpecializationInfo then return _G.GetSpecializationInfo(idx, false, false, group) end
+    return nil
+end
+
+local function getActiveSpecGroup()
+    if C_SpecializationInfo and C_SpecializationInfo.GetActiveSpecGroup then
+        return C_SpecializationInfo.GetActiveSpecGroup()
+    end
+    if _G.GetActiveSpecGroup then return _G.GetActiveSpecGroup() end
     return nil
 end
 
@@ -32,8 +40,14 @@ local PlayerState = {
     isHealer = false,
     enchantingSkill = 0,
     equippedILvl = {},     -- [invSlot] = ilvl number
+
+    -- Off-spec (populated by RefreshOffSpec; nil when disabled or unavailable)
+    offspecSpecID = nil,
+    offspecSpecName = nil,
+    offspecRole = nil,
+    offspecPrimaryStat = nil,
 }
-AutoRoll.PlayerState = PlayerState
+StellarLoot.PlayerState = PlayerState
 
 local function getDetailedItemLevel(link)
     if not link then return 0 end
@@ -67,6 +81,42 @@ function PlayerState:RefreshSpec()
     self.role = role
     self.primaryStat = primaryStat
     self.isHealer = (role == "HEALER") or (specID and Data.HealerSpecIDs[specID]) or false
+end
+
+function PlayerState:RefreshOffSpec()
+    local cfg = StellarLoot.Config and StellarLoot.Config:Get()
+    local offspec = (cfg and cfg.offspec) or {}
+    local source = offspec.source or "off"
+
+    self.offspecSpecID, self.offspecSpecName = nil, nil
+    self.offspecRole, self.offspecPrimaryStat = nil, nil
+
+    if source == "off" then return end
+
+    if source == "manual" then
+        self.offspecPrimaryStat = offspec.primaryStat
+        return
+    end
+
+    -- source == "auto": read the inactive talent group
+    local active = getActiveSpecGroup()
+    if not active then
+        -- API not available; fall back to the manual stat if user supplied one
+        self.offspecPrimaryStat = offspec.primaryStat
+        return
+    end
+    local other = (active == 1) and 2 or 1
+    local idx = getSpecIndex(other)
+    if not idx or idx == 0 then
+        -- Off-spec not trained yet; use manual fallback if available
+        self.offspecPrimaryStat = offspec.primaryStat
+        return
+    end
+    local specID, name, _, _, role, primaryStat = getSpecInfo(idx, other)
+    self.offspecSpecID = specID
+    self.offspecSpecName = name
+    self.offspecRole = role
+    self.offspecPrimaryStat = primaryStat or offspec.primaryStat
 end
 
 function PlayerState:RefreshProfessions()
@@ -110,6 +160,58 @@ function PlayerState:WorstEquippedILvl(equipLoc)
     return worst or 0
 end
 
+-- Resolve the item link the named equipment set assigns to a given inv slot.
+-- Returns nil if the set doesn't define that slot, the set name is invalid, or
+-- the item lives somewhere we can't read from (bank/void storage when away).
+function PlayerState:GetEquipmentSetItemLink(setName, invSlot)
+    if not setName or not invSlot then return nil end
+    if not _G.GetEquipmentSetLocations or not _G.EquipmentManager_UnpackLocation then
+        return nil
+    end
+    local locations = GetEquipmentSetLocations(setName)
+    if not locations then return nil end
+    local loc = locations[invSlot]
+    if not loc or loc == 0 or loc == -1 then return nil end
+    local player, _bank, bags, _void, slot, bag = EquipmentManager_UnpackLocation(loc)
+    if player then
+        return GetInventoryItemLink("player", invSlot)
+    elseif bags and _G.GetContainerItemLink then
+        return GetContainerItemLink(bag, slot)
+    end
+    return nil
+end
+
+-- Worst ilvl across the slots an equipLoc maps to, but using items from an
+-- equipment set rather than what's currently equipped. Returns nil if the set
+-- has no items in any of those slots (caller should treat that as "no
+-- comparison possible").
+function PlayerState:WorstSetILvl(equipLoc, setName)
+    local slots = Data.EquipLocToSlots[equipLoc]
+    if not slots or not setName then return nil end
+    local worst
+    for _, slot in ipairs(slots) do
+        local link = self:GetEquipmentSetItemLink(setName, slot)
+        if link then
+            local ilvl = getDetailedItemLevel(link)
+            if not worst or ilvl < worst then worst = ilvl end
+        end
+    end
+    return worst
+end
+
+-- Enumerate equipment set names; legacy MoP API. Returns a sorted list.
+function PlayerState:GetEquipmentSetNames()
+    local names = {}
+    if _G.GetNumEquipmentSets and _G.GetEquipmentSetInfo then
+        for i = 1, GetNumEquipmentSets() do
+            local n = GetEquipmentSetInfo(i)
+            if n then table.insert(names, n) end
+        end
+    end
+    table.sort(names)
+    return names
+end
+
 function PlayerState:Snapshot()
     -- Returns a shallow copy of mutable scalars + a reference to equippedILvl.
     -- Decision.Evaluate treats this as read-only.
@@ -123,6 +225,11 @@ function PlayerState:Snapshot()
         isHealer = self.isHealer,
         enchantingSkill = self.enchantingSkill,
         equippedILvl = self.equippedILvl,
+        offspecSpecID = self.offspecSpecID,
+        offspecSpecName = self.offspecSpecName,
+        offspecRole = self.offspecRole,
+        offspecPrimaryStat = self.offspecPrimaryStat,
         worstEquippedILvl = function(equipLoc) return PlayerState:WorstEquippedILvl(equipLoc) end,
+        worstSetILvl = function(equipLoc, setName) return PlayerState:WorstSetILvl(equipLoc, setName) end,
     }
 end

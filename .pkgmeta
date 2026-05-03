@@ -1,4 +1,4 @@
-package-as: AutoRoll
+package-as: StellarLoot
 
 ignore:
   - .github

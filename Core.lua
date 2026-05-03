@@ -1,9 +1,9 @@
--- AutoRoll: shared addon namespace.
--- Loaded first so every other file can attach to AutoRoll.*
+-- StellarLoot: shared addon namespace.
+-- Loaded first so every other file can attach to StellarLoot.*
 
 local addonName, ns = ...
 
-AutoRoll = {
+StellarLoot = {
     name = addonName,
     ns = ns,
 }

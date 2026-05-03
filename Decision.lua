@@ -1,17 +1,17 @@
--- AutoRoll/Decision.lua
+-- StellarLoot/Decision.lua
 -- Pure decision logic. No side effects. Directly testable from /run.
 --
 -- Decision.Evaluate(itemLink, rollInfo, ctx) → action, trace
---   action: "PASS" | "GREED" | "NEED" | "DE" | "DEFER" | nil
+--   action: "PASS" | "GREED" | "NEED" | "DEFER" | nil
 --           nil = don't roll (master toggle off)
 --           DEFER = item info not loaded yet; caller should retry later
 --   trace: { itemID, itemLink, factors = {...}, action, decisive, reason }
 --          Every check appended a factor. The decisive factor is the rule
 --          that determined the action.
 
-local Data = AutoRoll.Data
+local Data = StellarLoot.Data
 local Decision = {}
-AutoRoll.Decision = Decision
+StellarLoot.Decision = Decision
 
 local function qualityName(q)
     return Data.QualityNames[q] or tostring(q)
@@ -119,13 +119,13 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     end
 
     -- Step 5: any roll option available?
-    if not rollInfo.canNeed and not rollInfo.canGreed and not rollInfo.canDisenchant then
+    if not rollInfo.canNeed and not rollInfo.canGreed then
         return decide(trace, "PASS",
-            "no roll options available (Need/Greed/DE all disallowed)",
+            "no roll options available (Need and Greed both disallowed)",
             { rule = "NO_ROLL_OPTIONS" })
     end
-    note(trace, ("roll options: Need=%s Greed=%s DE=%s"):format(
-        tostring(rollInfo.canNeed), tostring(rollInfo.canGreed), tostring(rollInfo.canDisenchant)))
+    note(trace, ("roll options: Need=%s Greed=%s"):format(
+        tostring(rollInfo.canNeed), tostring(rollInfo.canGreed)))
 
     -- Step 6: can the class equip this at all?
     local isArmor  = (classID == Data.ITEM_CLASS_ARMOR)
@@ -184,25 +184,29 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
-    -- Step 9: primary stat match (only for items with stats — armor & weapons)
+    -- Step 9: primary stat match — main spec or off-spec
+    -- specBranch tracks which spec the item matches: "main" or "off". Tier
+    -- tokens and stat-less items short-circuit to "main".
+    local specBranch
     local needsStatCheck = isArmor or isWeapon
     local skipStatCheck = (itemID and Data.TierTokens[itemID])  -- tier tokens already passed
-    if needsStatCheck and not skipStatCheck then
+    if not needsStatCheck or skipStatCheck then
+        specBranch = "main"
+    else
         local statOverride = cfg.classOverrides and cfg.classOverrides.primaryStat
         local primaryStat = statOverride or ctx.primaryStat
         if not primaryStat then
             note(trace, "no primary stat detected — skipping stat check")
+            specBranch = "main"
         else
             local statKey = Data.PrimaryStatKey[primaryStat]
             local statName = Data.PrimaryStatName[primaryStat] or "?"
             local stats = GetItemStats(itemLink) or {}
             local hasPrimary = statKey and (stats[statKey] or 0) > 0
-
-            -- Spirit handling: healers accept Spirit-Int items even if INT is missing
-            -- (rare). For non-healers, Spirit on an INT item is irrelevant.
             local hasSpirit = (stats["ITEM_MOD_SPIRIT_SHORT"] or 0) > 0
 
-            -- Extra accepted stats from config
+            -- Extra accepted stats from config (e.g. healer Spirit treated
+            -- as a primary-equivalent for some specs).
             local extraOK = false
             if cfg.classOverrides and cfg.classOverrides.extraStats then
                 for _, key in ipairs(cfg.classOverrides.extraStats) do
@@ -213,49 +217,84 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                 end
             end
 
-            if not hasPrimary and not extraOK then
-                -- Healers tolerate items with Spirit + Int even if their primary is Int.
-                -- The check above already requires Int for an int-spec, so this is mostly
-                -- a no-op; here we only fall through if the item carries the right stat.
-                return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                    ("missing primary stat %s"):format(statName),
-                    { rule = "WRONG_PRIMARY_STAT", want = statName,
-                      stats = stats })
-            end
-            note(trace, ("primary stat %s present"):format(statName))
-            if ctx.isHealer and hasSpirit then
-                note(trace, "Spirit present (healer spec — bonus)")
+            if hasPrimary or extraOK then
+                specBranch = "main"
+                note(trace, ("primary stat %s present (main spec)"):format(statName))
+                if ctx.isHealer and hasSpirit then
+                    note(trace, "Spirit present (healer spec — bonus)")
+                end
+            else
+                -- Try off-spec match
+                local offStat = ctx.offspecPrimaryStat
+                if offStat and offStat ~= primaryStat then
+                    local offKey = Data.PrimaryStatKey[offStat]
+                    local offName = Data.PrimaryStatName[offStat] or "?"
+                    if offKey and (stats[offKey] or 0) > 0 then
+                        specBranch = "off"
+                        note(trace, ("off-spec primary stat %s present"):format(offName),
+                            { rule = "OFFSPEC_STAT_MATCH" })
+                    end
+                end
+                if not specBranch then
+                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                        ("missing primary stat %s"):format(statName),
+                        { rule = "WRONG_PRIMARY_STAT", want = statName,
+                          stats = stats })
+                end
             end
         end
     end
 
-    -- Step 10: ilvl comparison vs equipped
-    -- Only Need-eligible if the item maps to a real equipment slot OR is a
-    -- tier token. Non-equippable drops (recipes, mounts, BoP mats) fall
-    -- through to the default action below.
+    -- Step 10: ilvl comparison
+    -- mainSpec branch: compare against currently-equipped (worst slot).
+    -- offSpec branch:  compare against the configured equipment-manager set.
+    -- Non-equippable items fall through to the default below.
     local isEquippable = equipLoc and Data.EquipLocToSlots[equipLoc] ~= nil
     local isKnownTierToken = itemID and Data.TierTokens[itemID] ~= nil
     if isEquippable then
         local incomingILvl = effectiveILvl(itemLink)
-        local equippedILvl = ctx.worstEquippedILvl(equipLoc)
+        local compareILvl, compareLabel
+
+        if specBranch == "off" then
+            local setName = cfg.offspec and cfg.offspec.equipmentSet
+            if not setName or setName == "" then
+                return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                    "off-spec match but no equipment set configured — Greed",
+                    { rule = "OFFSPEC_NO_SET" })
+            end
+            compareILvl = ctx.worstSetILvl and ctx.worstSetILvl(equipLoc, setName) or nil
+            if not compareILvl then
+                return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                    ("off-spec set %q has no item in this slot — Greed"):format(setName),
+                    { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
+            end
+            compareLabel = ('set "%s"'):format(setName)
+        else
+            compareILvl = ctx.worstEquippedILvl(equipLoc)
+            compareLabel = "equipped"
+        end
 
         if not cfg.requireILvlUpgrade then
-            note(trace, ("ilvl check disabled — incoming %d vs equipped %d"):format(
-                incomingILvl, equippedILvl))
+            note(trace, ("ilvl check disabled — incoming %d vs %s %d"):format(
+                incomingILvl, compareLabel, compareILvl))
             if rollInfo.canNeed then
                 return decide(trace, "NEED",
                     "stat-matching item (ilvl upgrade not required)",
-                    { rule = "STAT_MATCH_ANY_ILVL" })
+                    { rule = "STAT_MATCH_ANY_ILVL", branch = specBranch })
             end
         else
-            note(trace, ("ilvl: incoming %d vs equipped %d (margin %d)"):format(
-                incomingILvl, equippedILvl, cfg.needILvlMargin),
-                { rule = "ILVL", incoming = incomingILvl, equipped = equippedILvl })
+            note(trace, ("ilvl: incoming %d vs %s %d (margin %d)"):format(
+                incomingILvl, compareLabel, compareILvl, cfg.needILvlMargin),
+                { rule = "ILVL", incoming = incomingILvl, compare = compareILvl,
+                  branch = specBranch })
 
-            if rollInfo.canNeed and incomingILvl > equippedILvl + cfg.needILvlMargin then
+            if rollInfo.canNeed and incomingILvl > compareILvl + cfg.needILvlMargin then
+                local suffix = (specBranch == "off") and " (off-spec)" or ""
                 return decide(trace, "NEED",
-                    ("upgrade: +%d ilvl over equipped"):format(incomingILvl - equippedILvl),
-                    { rule = "UPGRADE", delta = incomingILvl - equippedILvl })
+                    ("upgrade: +%d ilvl over %s%s"):format(
+                        incomingILvl - compareILvl, compareLabel, suffix),
+                    { rule = "UPGRADE", delta = incomingILvl - compareILvl,
+                      branch = specBranch })
             end
         end
     elseif isKnownTierToken and rollInfo.canNeed then
@@ -267,25 +306,8 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             { rule = "NON_EQUIPPABLE", equipLoc = equipLoc })
     end
 
-    -- Step 11: default — Greed (with DE preference if eligible) or Pass
-    local action = "GREED"
-    if not rollInfo.canGreed then
-        action = "PASS"
-    end
-
-    -- DE upgrade: if we'd Greed, prefer DE when eligible
-    if action == "GREED" and rollInfo.canDisenchant and cfg.preferDEoverGreed then
-        local skill = ctx.enchantingSkill or 0
-        local req = rollInfo.deSkillRequired or 0
-        if skill >= req and skill > 0 then
-            return decide(trace, "DE",
-                ("DE preferred: enchanting skill %d ≥ required %d"):format(skill, req),
-                { rule = "DE_PREFERRED", skill = skill, required = req })
-        else
-            note(trace, ("DE skipped: skill %d < required %d"):format(skill, req))
-        end
-    end
-
+    -- Step 11: default — Greed or Pass
+    local action = rollInfo.canGreed and "GREED" or "PASS"
     return decide(trace, action,
         (action == "GREED")
             and "no upgrade and no disqualifier — default Greed"
@@ -296,7 +318,7 @@ end
 -- Convenience: render a trace into a multi-line string for verbose logging.
 function Decision.FormatTrace(trace)
     local lines = {}
-    table.insert(lines, ("AutoRoll trace for %s [%s]:"):format(
+    table.insert(lines, ("StellarLoot trace for %s [%s]:"):format(
         trace.itemLink or "?", tostring(trace.itemID)))
     for i, f in ipairs(trace.factors) do
         local marker = f.decisive and "→" or "·"

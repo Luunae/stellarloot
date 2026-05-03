@@ -1,20 +1,20 @@
--- AutoRoll/Events.lua
+-- StellarLoot/Events.lua
 -- Wires loot-roll events to Decision.Evaluate, then to RollOnLoot via a
 -- humanize delay. Handles deferred decisions when GetItemInfo hasn't loaded.
 
-local Data        = AutoRoll.Data
-local Decision    = AutoRoll.Decision
-local PlayerState = AutoRoll.PlayerState
-local Config      = AutoRoll.Config
-local Log         = AutoRoll.Log
+local Data        = StellarLoot.Data
+local Decision    = StellarLoot.Decision
+local PlayerState = StellarLoot.PlayerState
+local Config      = StellarLoot.Config
+local Log         = StellarLoot.Log
 
 local Events = {
     pendingRolls = {},     -- [rollID] = { itemLink = , scheduledAt = , safetyTimer = }
     pendingByItemID = {},  -- [itemID] = { [rollID] = true } awaiting GET_ITEM_INFO_RECEIVED
 }
-AutoRoll.Events = Events
+StellarLoot.Events = Events
 
-local frame = CreateFrame("Frame", "AutoRollEventFrame")
+local frame = CreateFrame("Frame", "StellarLootEventFrame")
 
 local function scheduleRoll(rollID, action, itemLink)
     local cfg = Config:Get()
@@ -53,9 +53,7 @@ local function evaluateAndAct(rollID)
     local itemLink = GetLootRollItemLink(rollID)
     if not itemLink then return end
 
-    local _texture, name, _count, quality, bindOnPickUp, canNeed, canGreed,
-          canDisenchant, _reasonNeed, _reasonGreed, _reasonDisenchant,
-          deSkillRequired = GetLootRollItemInfo(rollID)
+    local _texture, name, _count, quality, bindOnPickUp, canNeed, canGreed = GetLootRollItemInfo(rollID)
 
     local rollInfo = {
         name = name,
@@ -63,8 +61,6 @@ local function evaluateAndAct(rollID)
         bindOnPickUp = bindOnPickUp,
         canNeed = canNeed,
         canGreed = canGreed,
-        canDisenchant = canDisenchant,
-        deSkillRequired = deSkillRequired,
     }
 
     local ctx = PlayerState:Snapshot()
@@ -143,6 +139,9 @@ frame:RegisterEvent("START_LOOT_ROLL")
 frame:RegisterEvent("CANCEL_LOOT_ROLL")
 frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 frame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+frame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+frame:RegisterEvent("PLAYER_TALENT_UPDATE")
+frame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
 
@@ -154,7 +153,19 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         onItemInfoReceived(arg1, arg2)
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if arg1 == "player" or arg1 == nil then PlayerState:RefreshSpec() end
+        if arg1 == "player" or arg1 == nil then
+            PlayerState:RefreshSpec()
+            PlayerState:RefreshOffSpec()
+        end
+    elseif event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "PLAYER_TALENT_UPDATE" then
+        PlayerState:RefreshSpec()
+        PlayerState:RefreshOffSpec()
+    elseif event == "EQUIPMENT_SETS_CHANGED" then
+        -- Equipment set membership changed; nothing cached to invalidate (we
+        -- read locations on demand), but refresh the UI dropdown if open.
+        if StellarLoot.ConfigUI and StellarLoot.ConfigUI.RefreshOffspecSets then
+            StellarLoot.ConfigUI:RefreshOffspecSets()
+        end
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         PlayerState:RefreshSlot(arg1)
     elseif event == "SKILL_LINES_CHANGED" then
@@ -168,8 +179,8 @@ function Events.EvaluateLink(itemLink, fakeRollInfo)
     local ctx = PlayerState:Snapshot()
     ctx.config = cfg
     local rollInfo = fakeRollInfo or {
-        canNeed = true, canGreed = true, canDisenchant = false,
-        quality = 4, bindOnPickUp = true, deSkillRequired = 0,
+        canNeed = true, canGreed = true,
+        quality = 4, bindOnPickUp = true,
     }
     return Decision.Evaluate(itemLink, rollInfo, ctx)
 end

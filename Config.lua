@@ -1,7 +1,7 @@
--- AutoRoll/Config.lua
+-- StellarLoot/Config.lua
 -- Two-tier saved variables:
---   AutoRollDB     — account-wide settings (the source of truth)
---   AutoRollCharDB — per-character overrides (only used when activated)
+--   StellarLootDB     — account-wide settings (the source of truth)
+--   StellarLootCharDB — per-character overrides (only used when activated)
 --
 -- Reads/writes go to whichever scope is currently active. Toggling
 -- per-character overrides ON copies the global table as a starting point so
@@ -9,7 +9,7 @@
 -- copy (so re-enabling restores it) but the global table becomes active again.
 
 local Config = {}
-AutoRoll.Config = Config
+StellarLoot.Config = Config
 
 Config.DEFAULTS = {
     version = 1,
@@ -28,12 +28,16 @@ Config.DEFAULTS = {
     needILvlMargin = 0,               -- ilvls beyond equipped required for Need
     -- Behavior toggles
     greedUnusable = true,
-    preferDEoverGreed = true,
     fallbackAction = "GREED",         -- GREED | PASS | NEED | MANUAL
-    overrides = {},                   -- [itemID] = "NEED" | "GREED" | "PASS" | "DE"
+    overrides = {},                   -- [itemID] = "NEED" | "GREED" | "PASS"
     classOverrides = {
         primaryStat = nil,
         extraStats  = {},
+    },
+    offspec = {
+        source = "off",               -- "off" | "auto" | "manual"
+        primaryStat = nil,            -- 1=Str, 2=Agi, 4=Int (manual or auto fallback)
+        equipmentSet = nil,           -- equipment set name; nil disables off-spec ilvl checks
     },
     log = {
         enabled = true,               -- master: print to chat + persist + show in sub-panel
@@ -67,29 +71,29 @@ local function deepCopy(src, dst)
 end
 
 function Config:Init()
-    if type(AutoRollDB) ~= "table"     then AutoRollDB = {}     end
-    if type(AutoRollCharDB) ~= "table" then AutoRollCharDB = {} end
-    if type(AutoRollLog) ~= "table"    then AutoRollLog = { entries = {} } end
-    if type(AutoRollLog.entries) ~= "table" then AutoRollLog.entries = {} end
+    if type(StellarLootDB) ~= "table"     then StellarLootDB = {}     end
+    if type(StellarLootCharDB) ~= "table" then StellarLootCharDB = {} end
+    if type(StellarLootLog) ~= "table"    then StellarLootLog = { entries = {} } end
+    if type(StellarLootLog.entries) ~= "table" then StellarLootLog.entries = {} end
 
-    deepMerge(AutoRollDB, Config.DEFAULTS)
+    deepMerge(StellarLootDB, Config.DEFAULTS)
 
     -- Per-char metadata lives in __meta to avoid colliding with setting keys.
-    AutoRollCharDB.__meta = AutoRollCharDB.__meta or { active = false, seeded = false }
+    StellarLootCharDB.__meta = StellarLootCharDB.__meta or { active = false, seeded = false }
 
     -- If per-char was previously seeded, fill in any new default keys that
     -- have been added since (without overwriting existing user choices).
-    if AutoRollCharDB.__meta.seeded then
-        deepMerge(AutoRollCharDB, Config.DEFAULTS)
+    if StellarLootCharDB.__meta.seeded then
+        deepMerge(StellarLootCharDB, Config.DEFAULTS)
     end
 
     -- Migration: drop the obsolete log.save flag (folded into log.enabled).
-    if AutoRollDB.log     and AutoRollDB.log.save     ~= nil then AutoRollDB.log.save     = nil end
-    if AutoRollCharDB.log and AutoRollCharDB.log.save ~= nil then AutoRollCharDB.log.save = nil end
+    if StellarLootDB.log     and StellarLootDB.log.save     ~= nil then StellarLootDB.log.save     = nil end
+    if StellarLootCharDB.log and StellarLootCharDB.log.save ~= nil then StellarLootCharDB.log.save = nil end
 
-    self.global = AutoRollDB
-    self.char   = AutoRollCharDB
-    self.log    = AutoRollLog
+    self.global = StellarLootDB
+    self.char   = StellarLootCharDB
+    self.log    = StellarLootLog
     return self:Get()
 end
 

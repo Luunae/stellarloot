@@ -1,27 +1,26 @@
--- AutoRoll/LogUI.lua
--- Sub-panel ("Log") nested under the main AutoRoll category in the Settings
+-- StellarLoot/LogUI.lua
+-- Sub-panel ("Log") nested under the main StellarLoot category in the Settings
 -- tree. Renders the persistent decision history embedded in the panel — no
 -- chat-frame dump required. Live-refreshes via Log:Subscribe so new decisions
 -- appear immediately while the panel is open.
 
-local Config = AutoRoll.Config
-local Log    = AutoRoll.Log
+local Config = StellarLoot.Config
+local Log    = StellarLoot.Log
 
 local LogUI = {}
-AutoRoll.LogUI = LogUI
+StellarLoot.LogUI = LogUI
 
 local ACTION_COLORS = {
     NEED   = "|cff00ff00",
     GREED  = "|cffffff00",
-    DE     = "|cffff8800",
     PASS   = "|cff999999",
     DEFER  = "|cff8888ff",
     MANUAL = "|cffcccccc",
 }
 
-local panel = CreateFrame("Frame", "AutoRollLogPanel", UIParent)
+local panel = CreateFrame("Frame", "StellarLootLogPanel", UIParent)
 panel.name = "Log"
-panel.parent = "AutoRoll"   -- legacy fallback; modern path uses RegisterCanvasLayoutSubcategory
+panel.parent = "StellarLoot"   -- legacy fallback; modern path uses RegisterCanvasLayoutSubcategory
 panel:Hide()
 LogUI.panel = panel
 
@@ -29,7 +28,7 @@ LogUI.panel = panel
 
 local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("AutoRoll — Decision Log")
+title:SetText("StellarLoot — Decision Log")
 
 local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
@@ -37,7 +36,7 @@ subtitle:SetWidth(540)
 subtitle:SetJustifyH("LEFT")
 subtitle:SetText("Most recent decisions appear at the top. Click any item link for a tooltip; shift-click to chat-link it.")
 
-local cbEnabled = CreateFrame("CheckButton", "AutoRollLog_cbEnabled", panel, "InterfaceOptionsCheckButtonTemplate")
+local cbEnabled = CreateFrame("CheckButton", "StellarLootLog_cbEnabled", panel, "InterfaceOptionsCheckButtonTemplate")
 cbEnabled:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -12)
 _G[cbEnabled:GetName() .. "Text"]:SetText("Logging enabled (record decisions and print to chat)")
 cbEnabled.tooltipText = "Logging master toggle"
@@ -46,7 +45,7 @@ cbEnabled:SetScript("OnClick", function(self)
     Config:Get().log.enabled = self:GetChecked() and true or false
 end)
 
-local cbVerbose = CreateFrame("CheckButton", "AutoRollLog_cbVerbose", panel, "InterfaceOptionsCheckButtonTemplate")
+local cbVerbose = CreateFrame("CheckButton", "StellarLootLog_cbVerbose", panel, "InterfaceOptionsCheckButtonTemplate")
 cbVerbose:SetPoint("TOPLEFT", cbEnabled, "BOTTOMLEFT", 0, -2)
 _G[cbVerbose:GetName() .. "Text"]:SetText("Verbose: show every factor checked")
 cbVerbose.tooltipText = "Verbose display"
@@ -56,14 +55,14 @@ cbVerbose:SetScript("OnClick", function(self)
     LogUI:Refresh()
 end)
 
-local btnClear = CreateFrame("Button", "AutoRollLog_btnClear", panel, "UIPanelButtonTemplate")
+local btnClear = CreateFrame("Button", "StellarLootLog_btnClear", panel, "UIPanelButtonTemplate")
 btnClear:SetSize(120, 22)
 btnClear:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -16)
 btnClear:SetText("Clear history")
-btnClear:SetScript("OnClick", function() StaticPopup_Show("AUTOROLL_CONFIRM_CLEAR_LOG") end)
+btnClear:SetScript("OnClick", function() StaticPopup_Show("STELLARLOOT_CONFIRM_CLEAR_LOG") end)
 
-StaticPopupDialogs["AUTOROLL_CONFIRM_CLEAR_LOG"] = {
-    text = "Clear AutoRoll decision history?",
+StaticPopupDialogs["STELLARLOOT_CONFIRM_CLEAR_LOG"] = {
+    text = "Clear StellarLoot decision history?",
     button1 = YES, button2 = NO,
     OnAccept = function()
         Config:ClearLog()
@@ -75,11 +74,11 @@ StaticPopupDialogs["AUTOROLL_CONFIRM_CLEAR_LOG"] = {
 
 -- ---- Scrolling history ----------------------------------------------------
 
-local scroll = CreateFrame("ScrollFrame", "AutoRollLog_Scroll", panel, "UIPanelScrollFrameTemplate")
+local scroll = CreateFrame("ScrollFrame", "StellarLootLog_Scroll", panel, "UIPanelScrollFrameTemplate")
 scroll:SetPoint("TOPLEFT", cbVerbose, "BOTTOMLEFT", 0, -12)
 scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 16)
 
-local content = CreateFrame("Frame", "AutoRollLog_Content", scroll)
+local content = CreateFrame("Frame", "StellarLootLog_Content", scroll)
 content:SetSize(540, 1)
 scroll:SetScrollChild(content)
 
@@ -142,7 +141,7 @@ function LogUI:Refresh()
         local fs = getRow(1)
         fs:ClearAllPoints()
         fs:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -8)
-        fs:SetText("|cff999999(no entries yet — let a roll fire, or try /autoroll eval <itemlink>)|r")
+        fs:SetText("|cff999999(no entries yet — let a roll fire, or try /stellarloot eval <itemlink>)|r")
         fs:Show()
         for i = 2, #rows do rows[i]:Hide() end
         content:SetHeight(40)
@@ -180,12 +179,12 @@ panel.default = function() end
 -- ---- Registration ---------------------------------------------------------
 
 if Settings and Settings.RegisterCanvasLayoutSubcategory
-        and AutoRoll.ConfigUI and AutoRoll.ConfigUI.panel
-        and AutoRoll.ConfigUI.panel.settingsCategory then
+        and StellarLoot.ConfigUI and StellarLoot.ConfigUI.panel
+        and StellarLoot.ConfigUI.panel.settingsCategory then
     local sub = Settings.RegisterCanvasLayoutSubcategory(
-        AutoRoll.ConfigUI.panel.settingsCategory, panel, panel.name)
+        StellarLoot.ConfigUI.panel.settingsCategory, panel, panel.name)
     if sub then
-        sub.ID = "AutoRollLog"
+        sub.ID = "StellarLootLog"
         panel.settingsCategory = sub
     end
 elseif _G.InterfaceOptions_AddCategory then

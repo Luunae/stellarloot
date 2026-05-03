@@ -1,10 +1,10 @@
 ## Interface: 50500
-## Title: AutoRoll
+## Title: Stellar Loot
 ## Notes: Automatically roll Need/Greed/Pass on group loot based on class, spec, and equipped gear.
 ## Author: Luna
 ## Version: @project-version@
-## SavedVariables: AutoRollDB, AutoRollLog
-## SavedVariablesPerCharacter: AutoRollCharDB
+## SavedVariables: StellarLootDB, StellarLootLog
+## SavedVariablesPerCharacter: StellarLootCharDB
 ## IconTexture: Interface\Icons\INV_Misc_Dice_01
 
 Core.lua

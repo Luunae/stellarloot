@@ -1,27 +1,27 @@
--- AutoRoll/Slash.lua
--- /autoroll dispatcher.
+-- StellarLoot/Slash.lua
+-- /stellarloot dispatcher.
 
-local Config      = AutoRoll.Config
-local Decision    = AutoRoll.Decision
-local PlayerState = AutoRoll.PlayerState
-local Events      = AutoRoll.Events
-local ConfigUI    = AutoRoll.ConfigUI
-local Log         = AutoRoll.Log
-local Data        = AutoRoll.Data
+local Config      = StellarLoot.Config
+local Decision    = StellarLoot.Decision
+local PlayerState = StellarLoot.PlayerState
+local Events      = StellarLoot.Events
+local ConfigUI    = StellarLoot.ConfigUI
+local Log         = StellarLoot.Log
+local Data        = StellarLoot.Data
 
 local function printHelp()
     Log:Info("commands:")
-    Log:Info("  /autoroll                  open config panel")
-    Log:Info("  /autoroll status           show current spec, primary stat, key thresholds")
-    Log:Info("  /autoroll toggle           enable/disable")
-    Log:Info("  /autoroll test             toggle preview mode (don't actually roll)")
-    Log:Info("  /autoroll verbose          toggle verbose logging")
-    Log:Info("  /autoroll log [N]          show last N saved decisions (default 20)")
-    Log:Info("  /autoroll log open         open the Decision Log sub-panel")
-    Log:Info("  /autoroll log clear        wipe saved history")
-    Log:Info("  /autoroll perchar          toggle per-character settings on this character")
-    Log:Info("  /autoroll override <id> <need|greed|pass|de|clear>")
-    Log:Info("  /autoroll eval <itemLink>  print what would be rolled for the linked item")
+    Log:Info("  /stellarloot                  open config panel")
+    Log:Info("  /stellarloot status           show current spec, primary stat, key thresholds")
+    Log:Info("  /stellarloot toggle           enable/disable")
+    Log:Info("  /stellarloot test             toggle preview mode (don't actually roll)")
+    Log:Info("  /stellarloot verbose          toggle verbose logging")
+    Log:Info("  /stellarloot log [N]          show last N saved decisions (default 20)")
+    Log:Info("  /stellarloot log open         open the Decision Log sub-panel")
+    Log:Info("  /stellarloot log clear        wipe saved history")
+    Log:Info("  /stellarloot perchar          toggle per-character settings on this character")
+    Log:Info("  /stellarloot override <id> <need|greed|pass|clear>")
+    Log:Info("  /stellarloot eval <itemLink>  print what would be rolled for the linked item")
 end
 
 local function cmdStatus()
@@ -29,17 +29,21 @@ local function cmdStatus()
     local stat = Data.PrimaryStatName[PlayerState.primaryStat] or "?"
     local scope = Config:UsingCharOverrides() and "per-character" or "account-wide"
     Log:Info(("scope: %s"):format(scope))
-    Log:Info(("status: enabled=%s test=%s class=%s spec=%s primary=%s enchanting=%d"):format(
+    Log:Info(("status: enabled=%s test=%s class=%s spec=%s primary=%s"):format(
         tostring(cfg.enabled), tostring(cfg.testMode),
         tostring(PlayerState.classToken), tostring(PlayerState.specName),
-        stat, PlayerState.enchantingSkill or 0))
+        stat))
     Log:Info(("filters: qualityFilter=%s minQuality=%s requireUpgrade=%s needMargin=%d"):format(
         tostring(cfg.qualityFilterEnabled),
         Data.QualityNames[cfg.minQuality] or cfg.minQuality,
         tostring(cfg.requireILvlUpgrade), cfg.needILvlMargin))
-    Log:Info(("behavior: greedUnusable=%s preferDE=%s fallback=%s"):format(
-        tostring(cfg.greedUnusable),
-        tostring(cfg.preferDEoverGreed), tostring(cfg.fallbackAction)))
+    Log:Info(("behavior: greedUnusable=%s fallback=%s"):format(
+        tostring(cfg.greedUnusable), tostring(cfg.fallbackAction)))
+    local off = cfg.offspec or {}
+    local offStat = Data.PrimaryStatName[PlayerState.offspecPrimaryStat] or "?"
+    local offSet = off.equipmentSet and ('"' .. off.equipmentSet .. '"') or "(none)"
+    Log:Info(("offspec: source=%s primary=%s set=%s"):format(
+        tostring(off.source or "off"), offStat, offSet))
     Log:Info(("logging: enabled=%s verbose=%s"):format(
         tostring(cfg.log.enabled), tostring(cfg.log.verbose)))
 end
@@ -65,7 +69,7 @@ end
 local function cmdOverride(args)
     local id, action = args:match("^(%d+)%s+(%a+)$")
     if not id then
-        Log:Warn("usage: /autoroll override <itemID> <need|greed|pass|de|clear>")
+        Log:Warn("usage: /stellarloot override <itemID> <need|greed|pass|clear>")
         return
     end
     local cfg = Config:Get()
@@ -74,7 +78,7 @@ local function cmdOverride(args)
     if action == "CLEAR" then
         cfg.overrides[id] = nil
         Log:Info("cleared override for itemID " .. id)
-    elseif action == "NEED" or action == "GREED" or action == "PASS" or action == "DE" then
+    elseif action == "NEED" or action == "GREED" or action == "PASS" then
         cfg.overrides[id] = action
         Log:Info(("set override: %d → %s"):format(id, action))
     else
@@ -86,7 +90,7 @@ local function cmdEval(args)
     -- Extract the first valid item link from the rest of the args.
     local link = args:match("(|%x+|Hitem:.-|h.-|h|r)") or args:match("(item:%d[%d:]*)")
     if not link then
-        Log:Warn("usage: /autoroll eval <item link>  (shift-click an item into chat)")
+        Log:Warn("usage: /stellarloot eval <item link>  (shift-click an item into chat)")
         return
     end
     local action, trace = Events.EvaluateLink(link, nil)
@@ -103,8 +107,8 @@ local function cmdLog(rest)
         return
     end
     if arg == "open" then
-        if AutoRoll.LogUI and AutoRoll.LogUI.Open then
-            AutoRoll.LogUI:Open()
+        if StellarLoot.LogUI and StellarLoot.LogUI.Open then
+            StellarLoot.LogUI:Open()
         end
         return
     end
@@ -130,9 +134,9 @@ local handlers = {
     ["?"]       = printHelp,
 }
 
-SLASH_AUTOROLL1 = "/autoroll"
-SLASH_AUTOROLL2 = "/ar"
-SlashCmdList["AUTOROLL"] = function(msg)
+SLASH_STELLARLOOT1 = "/stellarloot"
+SLASH_STELLARLOOT2 = "/sl"
+SlashCmdList["STELLARLOOT"] = function(msg)
     msg = msg or ""
     local cmd, rest = msg:match("^(%S*)%s*(.*)$")
     cmd = (cmd or ""):lower()

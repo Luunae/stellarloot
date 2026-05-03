@@ -1,25 +1,24 @@
--- AutoRoll/Log.lua
+-- StellarLoot/Log.lua
 -- Centralized chat output + a circular decision-history buffer.
 -- Renders Decision traces in two modes:
 --   terse   : one line per roll — action, item, decisive reason
 --   verbose : multi-line, every factor checked
 -- Test-mode prefix is "WOULD " to make dry-runs visually distinct.
 -- When cfg.log.enabled is true, each rendered decision is appended to
--- AutoRollLog.entries (capped by cfg.log.maxEntries) AND printed to chat.
+-- StellarLootLog.entries (capped by cfg.log.maxEntries) AND printed to chat.
 -- Subscribers (e.g. LogUI) can register via Log:Subscribe to get notified
 -- on each new saved entry.
 
 local Log = {}
-AutoRoll.Log = Log
+StellarLoot.Log = Log
 
 Log.listeners = {}
 
-local PREFIX = "|cff66ccffAutoRoll|r"
+local PREFIX = "|cff66ccffStellarLoot|r"
 
 local ACTION_COLORS = {
     NEED   = "|cff00ff00",
     GREED  = "|cffffff00",
-    DE     = "|cffff8800",
     PASS   = "|cff999999",
     DEFER  = "|cff8888ff",
     MANUAL = "|cffcccccc",
@@ -60,7 +59,7 @@ end
 -- Append a trace to the persistent log buffer (circular, capped).
 function Log:Save(trace, cfg)
     if not (cfg.log and cfg.log.enabled) then return end
-    local store = AutoRoll.Config:GetLog()
+    local store = StellarLoot.Config:GetLog()
     if not store then return end
     local entry = {
         time     = time(),
@@ -91,7 +90,7 @@ function Log:Subscribe(fn)
 end
 
 function Log:GetEntries()
-    local store = AutoRoll.Config:GetLog()
+    local store = StellarLoot.Config:GetLog()
     return store and store.entries or {}
 end
 
@@ -112,7 +111,7 @@ end
 
 -- View N most recent saved entries in chat.
 function Log:PrintRecent(n)
-    local store = AutoRoll.Config:GetLog()
+    local store = StellarLoot.Config:GetLog()
     local entries = store and store.entries or {}
     n = n or 20
     local total = #entries

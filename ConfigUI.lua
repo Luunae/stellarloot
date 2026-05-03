@@ -1,25 +1,25 @@
--- AutoRoll/ConfigUI.lua
+-- StellarLoot/ConfigUI.lua
 -- Blizzard Interface Options panel using stock widget templates.
 -- Wrapped in a ScrollFrame so the whole content is reachable on any
 -- panel size.
 
-local Config = AutoRoll.Config
-local Data   = AutoRoll.Data
+local Config = StellarLoot.Config
+local Data   = StellarLoot.Data
 
 local ConfigUI = {}
-AutoRoll.ConfigUI = ConfigUI
+StellarLoot.ConfigUI = ConfigUI
 
-local panel = CreateFrame("Frame", "AutoRollOptionsPanel", InterfaceOptionsFramePanelContainer or UIParent)
-panel.name = "AutoRoll"
+local panel = CreateFrame("Frame", "StellarLootOptionsPanel", InterfaceOptionsFramePanelContainer or UIParent)
+panel.name = "StellarLoot"
 panel:Hide()
 ConfigUI.panel = panel
 
 -- The scroll frame fills the panel; all content goes into scrollChild.
-local scroll = CreateFrame("ScrollFrame", "AutoRollOptionsScroll", panel, "UIPanelScrollFrameTemplate")
+local scroll = CreateFrame("ScrollFrame", "StellarLootOptionsScroll", panel, "UIPanelScrollFrameTemplate")
 scroll:SetPoint("TOPLEFT", 8, -8)
 scroll:SetPoint("BOTTOMRIGHT", -28, 8)
 
-local scrollChild = CreateFrame("Frame", "AutoRollOptionsScrollChild", scroll)
+local scrollChild = CreateFrame("Frame", "StellarLootOptionsScrollChild", scroll)
 scrollChild:SetSize(560, 1) -- height set after layout
 scroll:SetScrollChild(scrollChild)
 
@@ -53,7 +53,7 @@ local function makeDescription(parent, text, anchorTo, y, width)
 end
 
 local function makeCheckbox(parent, key, label, tooltip, anchorTo, x, y, getter, setter)
-    local cb = CreateFrame("CheckButton", "AutoRollOpt_" .. key, parent, "InterfaceOptionsCheckButtonTemplate")
+    local cb = CreateFrame("CheckButton", "StellarLootOpt_" .. key, parent, "InterfaceOptionsCheckButtonTemplate")
     cb:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", x or 0, y or -8)
     _G[cb:GetName() .. "Text"]:SetText(label)
     cb.tooltipText = label
@@ -72,7 +72,7 @@ end
 
 -- Slider with an associated formatter for the value label.
 local function makeSlider(parent, key, label, low, high, step, tooltip, anchorTo, x, y, formatter)
-    local slider = CreateFrame("Slider", "AutoRollOpt_" .. key, parent, "OptionsSliderTemplate")
+    local slider = CreateFrame("Slider", "StellarLootOpt_" .. key, parent, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", x or 16, y or -28)
     slider:SetWidth(280)
     slider:SetMinMaxValues(low, high)
@@ -120,7 +120,7 @@ local function makeSlider(parent, key, label, low, high, step, tooltip, anchorTo
 end
 
 local function makeDropdown(parent, key, label, choices, anchorTo, x, y)
-    local dd = CreateFrame("Frame", "AutoRollOpt_" .. key, parent, "UIDropDownMenuTemplate")
+    local dd = CreateFrame("Frame", "StellarLootOpt_" .. key, parent, "UIDropDownMenuTemplate")
     dd:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", x or 0, y or -28)
     local labelFS = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     labelFS:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 20, 2)
@@ -166,14 +166,14 @@ end
 
 local title = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("AutoRoll")
+title:SetText("StellarLoot")
 
 local subtitle = makeDescription(scrollChild,
     "Automatically rolls Need / Greed / Pass on group loot based on class, spec, and equipped gear.",
     title, -4)
 
 -- Per-character override toggle (master scope switch)
-local cbPerChar = CreateFrame("CheckButton", "AutoRollOpt_useCharOverrides", scrollChild, "InterfaceOptionsCheckButtonTemplate")
+local cbPerChar = CreateFrame("CheckButton", "StellarLootOpt_useCharOverrides", scrollChild, "InterfaceOptionsCheckButtonTemplate")
 cbPerChar:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -16)
 _G[cbPerChar:GetName() .. "Text"]:SetText("Use per-character settings on this character")
 cbPerChar.tooltipText = "Per-character settings"
@@ -216,13 +216,8 @@ local cbGreedUnusable = makeCheckbox(scrollChild, "greedUnusable",
     "When off, items your class cannot equip (e.g. Mage seeing Plate) are passed instead of greeded.",
     cbTestDesc, 0, -4)
 
-local cbDE = makeCheckbox(scrollChild, "preferDEoverGreed",
-    "Prefer Disenchant over Greed (when eligible)",
-    "If you have sufficient Enchanting skill and the item is disenchantable, roll DE instead of Greed.",
-    cbGreedUnusable, 0, -4)
-
 -- ---- Section: Quality & Upgrades ------------------------------------------
-local sec2 = makeSection(scrollChild, "Quality & Upgrades", cbDE, -20)
+local sec2 = makeSection(scrollChild, "Quality & Upgrades", cbGreedUnusable, -20)
 
 -- Quality filter: toggle + slider with quality NAMES
 local cbQualityEnabled = makeCheckbox(scrollChild, "qualityFilterEnabled",
@@ -266,8 +261,154 @@ local sliderMargin = makeSlider(scrollChild, "needILvlMargin",
         return ("Required ilvl margin: %d (incoming must be %d+ ilvl higher)"):format(v, v)
     end)
 
+-- ---- Section: Off-Spec ----------------------------------------------------
+local secOff = makeSection(scrollChild, "Off-Spec Support", sliderMargin, -28, -16)
+
+local offspecDesc = makeDescription(scrollChild,
+    "If you regularly play a second spec, StellarLoot can Need items that match its primary stat. " ..
+    "|cffffd200Heads up:|r off-spec rolls compare against an in-game Equipment Manager set, " ..
+    "|cffffffffnot|r your currently-equipped gear. Save your off-spec gear as a set in " ..
+    "Character → Equipment Manager first; without one, off-spec items fall through to Greed.",
+    secOff, -4, 540)
+
+local function offspec()
+    local cfg = Config:Get()
+    cfg.offspec = cfg.offspec or {}
+    return cfg.offspec
+end
+
+-- Off-spec source dropdown
+local sourceChoices = {
+    { label = "Disabled",    value = "off"    },
+    { label = "Auto-detect", value = "auto"   },
+    { label = "Manual",      value = "manual" },
+}
+local ddOffSource = CreateFrame("Frame", "StellarLootOpt_offspecSource", scrollChild, "UIDropDownMenuTemplate")
+ddOffSource:SetPoint("TOPLEFT", offspecDesc, "BOTTOMLEFT", 0, -16)
+local ddOffSourceLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+ddOffSourceLabel:SetPoint("BOTTOMLEFT", ddOffSource, "TOPLEFT", 20, 2)
+ddOffSourceLabel:SetText("Off-spec source")
+UIDropDownMenu_SetWidth(ddOffSource, 160)
+
+local statChoices = {
+    { label = "(unset)",   value = false },
+    { label = "Strength",  value = Data.STAT_STRENGTH },
+    { label = "Agility",   value = Data.STAT_AGILITY },
+    { label = "Intellect", value = Data.STAT_INTELLECT },
+}
+local ddOffStat = CreateFrame("Frame", "StellarLootOpt_offspecStat", scrollChild, "UIDropDownMenuTemplate")
+ddOffStat:SetPoint("TOPLEFT", ddOffSource, "BOTTOMLEFT", 0, -28)
+local ddOffStatLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+ddOffStatLabel:SetPoint("BOTTOMLEFT", ddOffStat, "TOPLEFT", 20, 2)
+ddOffStatLabel:SetText("Off-spec primary stat (manual)")
+UIDropDownMenu_SetWidth(ddOffStat, 160)
+
+local ddOffSet = CreateFrame("Frame", "StellarLootOpt_offspecSet", scrollChild, "UIDropDownMenuTemplate")
+ddOffSet:SetPoint("TOPLEFT", ddOffStat, "BOTTOMLEFT", 0, -28)
+local ddOffSetLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+ddOffSetLabel:SetPoint("BOTTOMLEFT", ddOffSet, "TOPLEFT", 20, 2)
+ddOffSetLabel:SetText("Off-spec equipment set")
+UIDropDownMenu_SetWidth(ddOffSet, 200)
+
+local function refreshOffspecEnable()
+    local source = offspec().source or "off"
+    if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
+        if source == "manual" then UIDropDownMenu_EnableDropDown(ddOffStat)
+        else                       UIDropDownMenu_DisableDropDown(ddOffStat) end
+        if source ~= "off" then    UIDropDownMenu_EnableDropDown(ddOffSet)
+        else                       UIDropDownMenu_DisableDropDown(ddOffSet) end
+    end
+end
+
+UIDropDownMenu_Initialize(ddOffSource, function(_, level)
+    for _, c in ipairs(sourceChoices) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text, info.value = c.label, c.value
+        info.func = function()
+            offspec().source = c.value
+            UIDropDownMenu_SetSelectedValue(ddOffSource, c.value)
+            UIDropDownMenu_SetText(ddOffSource, c.label)
+            refreshOffspecEnable()
+            if StellarLoot.PlayerState then StellarLoot.PlayerState:RefreshOffSpec() end
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end
+end)
+widgets.__offspec_source = {
+    type = "dropdown", widget = ddOffSource,
+    get = function() return offspec().source or "off" end,
+    set = function(v)
+        UIDropDownMenu_SetSelectedValue(ddOffSource, v)
+        for _, c in ipairs(sourceChoices) do
+            if c.value == v then UIDropDownMenu_SetText(ddOffSource, c.label) break end
+        end
+    end,
+}
+
+UIDropDownMenu_Initialize(ddOffStat, function(_, level)
+    for _, c in ipairs(statChoices) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text, info.value = c.label, c.value
+        info.func = function()
+            offspec().primaryStat = (c.value == false) and nil or c.value
+            UIDropDownMenu_SetSelectedValue(ddOffStat, c.value)
+            UIDropDownMenu_SetText(ddOffStat, c.label)
+            if StellarLoot.PlayerState then StellarLoot.PlayerState:RefreshOffSpec() end
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end
+end)
+widgets.__offspec_stat = {
+    type = "dropdown", widget = ddOffStat,
+    get = function() return offspec().primaryStat end,
+    set = function(v)
+        local target = (v == nil) and false or v
+        UIDropDownMenu_SetSelectedValue(ddOffStat, target)
+        for _, c in ipairs(statChoices) do
+            if c.value == target then UIDropDownMenu_SetText(ddOffStat, c.label) break end
+        end
+    end,
+}
+
+local function buildSetChoices()
+    local choices = { { label = "(none)", value = false } }
+    if StellarLoot.PlayerState and StellarLoot.PlayerState.GetEquipmentSetNames then
+        for _, name in ipairs(StellarLoot.PlayerState:GetEquipmentSetNames()) do
+            table.insert(choices, { label = name, value = name })
+        end
+    end
+    return choices
+end
+
+local function initSetDropdown()
+    UIDropDownMenu_Initialize(ddOffSet, function(_, level)
+        for _, c in ipairs(buildSetChoices()) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text, info.value = c.label, c.value
+            info.func = function()
+                offspec().equipmentSet = (c.value == false) and nil or c.value
+                UIDropDownMenu_SetSelectedValue(ddOffSet, c.value)
+                UIDropDownMenu_SetText(ddOffSet, c.label)
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+end
+initSetDropdown()
+function ConfigUI:RefreshOffspecSets() initSetDropdown() end
+
+widgets.__offspec_set = {
+    type = "dropdown", widget = ddOffSet,
+    get = function() return offspec().equipmentSet end,
+    set = function(v)
+        local target = (v == nil) and false or v
+        UIDropDownMenu_SetSelectedValue(ddOffSet, target)
+        UIDropDownMenu_SetText(ddOffSet, v or "(none)")
+    end,
+}
+
 -- ---- Section: Fallback ----------------------------------------------------
-local sec3 = makeSection(scrollChild, "Fallback Action", sliderMargin, -28, -16)
+local sec3 = makeSection(scrollChild, "Fallback Action", ddOffSet, -28, -16)
 local fallbackDesc = makeDescription(scrollChild,
     "What to do when item info doesn't load before the roll timer is about to expire.",
     sec3, -4, 540)
@@ -286,14 +427,14 @@ local ddFallback = makeDropdown(scrollChild, "fallbackAction",
 local sec5 = makeSection(scrollChild, "Per-item Overrides", ddFallback, -36)
 
 local hint = makeDescription(scrollChild,
-    "One per line, format: |cffffff00itemID:ACTION|r where ACTION is NEED, GREED, PASS, or DE. " ..
-    "Lines starting with # are comments. Use |cffffff00/autoroll override <id> <action>|r as a quick alternative.",
+    "One per line, format: |cffffff00itemID:ACTION|r where ACTION is NEED, GREED, or PASS. " ..
+    "Lines starting with # are comments. Use |cffffff00/stellarloot override <id> <action>|r as a quick alternative.",
     sec5, -4, 540)
 
-local oScroll = CreateFrame("ScrollFrame", "AutoRollOpt_overridesScroll", scrollChild, "UIPanelScrollFrameTemplate")
+local oScroll = CreateFrame("ScrollFrame", "StellarLootOpt_overridesScroll", scrollChild, "UIPanelScrollFrameTemplate")
 oScroll:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -8)
 oScroll:SetSize(540, 110)
-local edit = CreateFrame("EditBox", "AutoRollOpt_overridesEdit", oScroll)
+local edit = CreateFrame("EditBox", "StellarLootOpt_overridesEdit", oScroll)
 edit:SetMultiLine(true)
 edit:SetAutoFocus(false)
 edit:SetFontObject(ChatFontNormal)
@@ -319,7 +460,7 @@ local function parseOverrides(text)
             local id, action = trimmed:match("^(%d+)%s*[:=]%s*(%a+)$")
             if id and action then
                 action = action:upper()
-                if action == "NEED" or action == "GREED" or action == "PASS" or action == "DE" then
+                if action == "NEED" or action == "GREED" or action == "PASS" then
                     result[tonumber(id)] = action
                 end
             end
@@ -339,7 +480,7 @@ widgets["overrides"] = {
 }
 
 -- Compute scrollChild height so the viewport matches content.
-scrollChild:SetHeight(720)
+scrollChild:SetHeight(900)
 
 -- ---- Panel callbacks -------------------------------------------------------
 
@@ -363,6 +504,7 @@ panel.refresh = function()
     if widgets.needILvlMargin and widgets.needILvlMargin.enable then
         widgets.needILvlMargin.enable(Config:Get().requireILvlUpgrade)
     end
+    refreshOffspecEnable()
 end
 
 panel.okay = function()
@@ -395,6 +537,6 @@ function ConfigUI:Open()
         _G.InterfaceOptionsFrame_OpenToCategory(panel)
         _G.InterfaceOptionsFrame_OpenToCategory(panel)
     else
-        AutoRoll.Log:Warn("no options panel system detected on this client")
+        StellarLoot.Log:Warn("no options panel system detected on this client")
     end
 end

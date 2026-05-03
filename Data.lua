@@ -1,8 +1,8 @@
--- AutoRoll/Data.lua
+-- StellarLoot/Data.lua
 -- Static reference tables: class proficiency, spec→primary stat, equipLoc→inventory slot.
 
 local Data = {}
-AutoRoll.Data = Data
+StellarLoot.Data = Data
 
 -- Localized armor subtype strings come from GlobalStrings; we pin the localized
 -- names at runtime via GetItemSubClassInfo to stay locale-safe.
@@ -194,13 +194,11 @@ Data.TierTokens = {
 Data.ROLL_PASS  = 0
 Data.ROLL_NEED  = 1
 Data.ROLL_GREED = 2
-Data.ROLL_DE    = 3
 
 Data.ActionToRollType = {
     PASS  = Data.ROLL_PASS,
     NEED  = Data.ROLL_NEED,
     GREED = Data.ROLL_GREED,
-    DE    = Data.ROLL_DE,
 }
 
 -- Quality colors for chat output
