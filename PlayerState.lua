@@ -165,10 +165,12 @@ end
 -- the item lives somewhere we can't read from (bank/void storage when away).
 function PlayerState:GetEquipmentSetItemLink(setName, invSlot)
     if not setName or not invSlot then return nil end
-    if not _G.GetEquipmentSetLocations or not _G.EquipmentManager_UnpackLocation then
+    if not C_EquipmentSet or not _G.EquipmentManager_UnpackLocation then
         return nil
     end
-    local locations = GetEquipmentSetLocations(setName)
+    local setID = C_EquipmentSet.GetEquipmentSetID(setName)
+    if not setID then return nil end
+    local locations = C_EquipmentSet.GetItemLocations(setID)
     if not locations then return nil end
     local loc = locations[invSlot]
     if not loc or loc == 0 or loc == -1 then return nil end
@@ -199,12 +201,12 @@ function PlayerState:WorstSetILvl(equipLoc, setName)
     return worst
 end
 
--- Enumerate equipment set names; legacy MoP API. Returns a sorted list.
+-- Enumerate equipment set names. Returns a sorted list.
 function PlayerState:GetEquipmentSetNames()
     local names = {}
-    if _G.GetNumEquipmentSets and _G.GetEquipmentSetInfo then
-        for i = 1, GetNumEquipmentSets() do
-            local n = GetEquipmentSetInfo(i)
+    if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
+        for _, id in ipairs(C_EquipmentSet.GetEquipmentSetIDs()) do
+            local n = C_EquipmentSet.GetEquipmentSetInfo(id)
             if n then table.insert(names, n) end
         end
     end
