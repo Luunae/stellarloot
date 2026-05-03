@@ -1,0 +1,5 @@
+.release/
+*.zip
+*.bak
+*.swp
+.DS_Store

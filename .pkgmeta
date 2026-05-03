@@ -1,0 +1,13 @@
+package-as: AutoRoll
+
+ignore:
+  - .github
+  - .gitignore
+  - .claude
+  - README.md
+  - .pkgmeta
+
+manual-changelog: CHANGELOG.md
+
+move-folders:
+  # nothing to move; files are already at root
