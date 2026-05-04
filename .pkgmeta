@@ -1,13 +1,13 @@
 package-as: StellarLoot
 
+enable-nolib-creation: no
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 ignore:
   - .github
   - .gitignore
   - .claude
-  - README.md
   - .pkgmeta
-
-manual-changelog: CHANGELOG.md
-
-move-folders:
-  # nothing to move; files are already at root
