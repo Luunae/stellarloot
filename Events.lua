@@ -42,8 +42,13 @@ local function scheduleRoll(rollID, action, itemLink)
         if rollType ~= nil then
             -- nil action = let user click manually (master toggle off)
             if not cfg.testMode then
-                RollOnLoot(rollID, rollType)
+                -- Mark confirmable BEFORE RollOnLoot: CONFIRM_LOOT_ROLL can
+                -- fire synchronously inside the call, and if the flag isn't
+                -- set yet the handler will skip and the popup falls to the
+                -- player. A leaked flag is harmless — onCancelLootRoll clears
+                -- it, and unmatched entries are tiny and bounded per session.
                 Events.confirmableRolls[rollID] = true
+                RollOnLoot(rollID, rollType)
             end
         end
         Events.pendingRolls[rollID] = nil

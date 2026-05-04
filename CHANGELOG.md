@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3 — Auto-confirm
+
+**Auto-confirm BoP popup (new)** — when the addon submits a roll on a bind-on-pickup item and the client prompts "looting this will bind it to you, do you want to loot it?", the addon now accepts the prompt automatically. Only rolls the addon itself submitted are confirmed; bind dialogs from picking up unrolled loot remain the player's responsibility. Test mode is unaffected (no real roll → nothing to confirm).
+
+**Off-spec equipment set dropdown fix** — the "Off-spec equipment set" dropdown was empty even when equipment sets existed. The legacy `GetNumEquipmentSets` global was removed in Legion (7.0.3) and MoP Classic 5.5.x runs on the modern client, so the addon now uses the `C_EquipmentSet` namespace for both enumeration and per-slot lookups.
+
 ## 0.2 — Stellar Loot
 
 **Off-Spec Support (new)** — opt-in path for hybrids (e.g. Holy paladin / Prot off-spec). Picks up the off-spec primary stat via auto-detect (inactive talent group) or a manual override, and compares ilvl against an in-game Equipment Manager set you nominate. Without a set, off-spec items fall through to Greed with a clear trace reason.
