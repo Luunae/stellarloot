@@ -11,3 +11,5 @@ ignore:
   - .gitignore
   - .claude
   - .pkgmeta
+  - logo.svg
+  - logo.png
