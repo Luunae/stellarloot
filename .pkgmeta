@@ -7,7 +7,6 @@ manual-changelog:
   markup-type: markdown
 
 ignore:
-  - .github
   - .gitignore
   - .claude
   - .pkgmeta

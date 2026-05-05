@@ -97,7 +97,7 @@ The **Log** sub-panel (nested under Stellar Loot in the Settings tree) shows the
 
 ## Distribution
 
-This repository auto-publishes to CurseForge via the [BigWigs Packager](https://github.com/BigWigsMods/packager) GitHub Action on tag push (`vX.Y.Z`). Set the `CF_API_KEY` repo secret first.
+Releases are auto-packaged to CurseForge by CF's native packager on annotated tag push (`vX.Y.Z`). Lightweight tags are silently ignored.
 
 ## Contributing
 
