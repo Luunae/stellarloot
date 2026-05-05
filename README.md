@@ -15,8 +15,6 @@ Default behavior:
 - **Greed** anything else your class can use — the wrong armor type, the wrong primary stat, items below upgrade threshold, etc.
 - **Pass** on items below the configured quality threshold or that your class literally cannot equip (when "Greed unusable" is off).
 
-A short "humanize" delay (0.8–2.2s by default) is applied before rolling so it doesn't look botted.
-
 ## Install
 
 Via the CurseForge addon downloader, or manually: drop the contents of this repo into `Interface/AddOns/StellarLoot/` (file paths must end up at e.g. `Interface/AddOns/StellarLoot/StellarLoot.toc`).
@@ -100,3 +98,8 @@ The **Log** sub-panel (nested under Stellar Loot in the Settings tree) shows the
 ## Distribution
 
 This repository auto-publishes to CurseForge via the [BigWigs Packager](https://github.com/BigWigsMods/packager) GitHub Action on tag push (`vX.Y.Z`). Set the `CF_API_KEY` repo secret first.
+
+## Contributing
+
+If something looks wrong, feel free to let me know via comment, issue, or PR, even for things like typos.
+I'll notice interactions faster on Github than CurseForge, though.

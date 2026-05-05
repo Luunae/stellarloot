@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — Drop humanize delay
+
+Removed the 0.8–2.2s pre-roll delay (and its config block). It served no real purpose — the loot client doesn't care how fast a roll arrives, and the delay only added latency between item drops and the addon's response. Rolls are now submitted as soon as the decision is made.
+
+Also: added a brief Contributing note to the README.
+
 ## 0.3 — Auto-confirm
 
 **Auto-confirm BoP popup (new)** — when the addon submits a roll on a bind-on-pickup item and the client prompts "looting this will bind it to you, do you want to loot it?", the addon now accepts the prompt automatically. Only rolls the addon itself submitted are confirmed; bind dialogs from picking up unrolled loot remain the player's responsibility. Test mode is unaffected (no real roll → nothing to confirm).

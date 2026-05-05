@@ -15,11 +15,6 @@ Config.DEFAULTS = {
     version = 1,
     enabled = true,
     testMode = false,                 -- print decisions, don't actually roll
-    humanizeDelay = {
-        enabled = true,
-        minMs = 800,
-        maxMs = 2200,
-    },
     -- Quality filter
     qualityFilterEnabled = true,
     minQuality = 2,                   -- 0 poor … 4 epic

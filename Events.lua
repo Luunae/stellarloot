@@ -1,6 +1,6 @@
 -- StellarLoot/Events.lua
--- Wires loot-roll events to Decision.Evaluate, then to RollOnLoot via a
--- humanize delay. Handles deferred decisions when GetItemInfo hasn't loaded.
+-- Wires loot-roll events to Decision.Evaluate, then to RollOnLoot.
+-- Handles deferred decisions when GetItemInfo hasn't loaded.
 
 local Data        = StellarLoot.Data
 local Decision    = StellarLoot.Decision
@@ -17,42 +17,15 @@ StellarLoot.Events = Events
 
 local frame = CreateFrame("Frame", "StellarLootEventFrame")
 
-local function scheduleRoll(rollID, action, itemLink)
+local function submitRoll(rollID, action)
     local cfg = Config:Get()
-    local delayMs
-    if cfg.humanizeDelay and cfg.humanizeDelay.enabled then
-        local lo = cfg.humanizeDelay.minMs or 800
-        local hi = cfg.humanizeDelay.maxMs or 2200
-        delayMs = math.random(math.min(lo, hi), math.max(lo, hi))
-    else
-        delayMs = 250  -- still wait a tick so it doesn't look like a bot
-    end
-
-    -- Cap delay at (timeLeft - 500ms) so we never miss the window
-    local timeLeftMs = GetLootRollTimeLeft(rollID) or 0
-    if timeLeftMs > 0 and delayMs > timeLeftMs - 500 then
-        delayMs = math.max(100, timeLeftMs - 500)
-    end
-
-    C_Timer.After(delayMs / 1000, function()
-        local entry = Events.pendingRolls[rollID]
-        if not entry then return end       -- cancelled
-        if entry.action ~= action then return end  -- superseded
-        local rollType = Data.ActionToRollType[action]
-        if rollType ~= nil then
-            -- nil action = let user click manually (master toggle off)
-            if not cfg.testMode then
-                -- Mark confirmable BEFORE RollOnLoot: CONFIRM_LOOT_ROLL can
-                -- fire synchronously inside the call, and if the flag isn't
-                -- set yet the handler will skip and the popup falls to the
-                -- player. A leaked flag is harmless — onCancelLootRoll clears
-                -- it, and unmatched entries are tiny and bounded per session.
-                Events.confirmableRolls[rollID] = true
-                RollOnLoot(rollID, rollType)
-            end
-        end
-        Events.pendingRolls[rollID] = nil
-    end)
+    local rollType = Data.ActionToRollType[action]
+    if rollType == nil or cfg.testMode then return end
+    -- Mark confirmable BEFORE RollOnLoot: CONFIRM_LOOT_ROLL can fire
+    -- synchronously inside the call, and the handler skips if the flag
+    -- isn't set yet. onCancelLootRoll clears any leaked flag.
+    Events.confirmableRolls[rollID] = true
+    RollOnLoot(rollID, rollType)
 end
 
 local function evaluateAndAct(rollID)
@@ -95,22 +68,21 @@ local function evaluateAndAct(rollID)
                     Log:Warn(("item info never loaded for rollID %d — falling back to %s"):format(
                         rollID, fallback))
                     Events.pendingRolls[rollID] = { action = fallback, itemLink = itemLink }
-                    scheduleRoll(rollID, fallback, itemLink)
+                    submitRoll(rollID, fallback)
                 end
             end
         end)
         return
     end
 
-    -- Render the trace (terse or verbose per config). Always render before
-    -- scheduling so the chat output ordering matches decision order.
     Log:Render(trace, cfg)
 
-    -- Record and schedule. Action == nil (master toggle off) and "MANUAL"
-    -- both mean "do not call RollOnLoot" — leave the dialog for the player.
+    -- Action == nil (master toggle off) and "MANUAL" both mean "do not call
+    -- RollOnLoot" — leave the dialog for the player. pendingRolls is the
+    -- "we have decided" marker the DEFER safety timer reads to skip fallback.
     Events.pendingRolls[rollID] = { action = action, itemLink = itemLink }
     if action and action ~= "MANUAL" then
-        scheduleRoll(rollID, action, itemLink)
+        submitRoll(rollID, action)
     end
 end
 
