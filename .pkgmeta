@@ -12,3 +12,6 @@ ignore:
   - .pkgmeta
   - logo.svg
   - logo.png
+  - devbuild.sh
+  - build
+  - raw_tokens_id_name_req_source_wowhead-markup-tag.txt

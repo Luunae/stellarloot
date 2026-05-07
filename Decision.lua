@@ -170,17 +170,30 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
-    -- Step 8: tier token / class-restricted item
+    -- Step 8: tier token / class-restricted item.
+    -- Token tooltips don't show the redeemed gear's ilvl in-game, so we
+    -- surface it in the trace — it's the only way to tell LFR/Normal/Heroic
+    -- variants apart at a glance. tokenEquipLoc, when set, redirects Step 10's
+    -- ilvl comparison from the token's INVTYPE_NON_EQUIP_IGNORE to the slot
+    -- the token redeems for ("WILDCARD" = Essence; compares vs worst tier slot).
+    local tokenEquipLoc
     if itemID and Data.TierTokens[itemID] then
         local allowed = Data.TierTokens[itemID]
+        local tokenILvl = effectiveILvl(itemLink)
         if allowed[classToken] then
-            note(trace, ("tier token redeemable by %s — eligible for Need"):format(classToken),
-                { rule = "TIER_TOKEN_MATCH" })
+            tokenEquipLoc = Data.TierTokenEquipLoc(name)
+            local slotDesc = (tokenEquipLoc == "WILDCARD" and "any tier slot")
+                          or tokenEquipLoc
+                          or "unknown slot"
+            note(trace, ("tier token (ilvl %d) redeemable by %s for %s — eligible for Need"):format(
+                tokenILvl, classToken, slotDesc),
+                { rule = "TIER_TOKEN_MATCH", ilvl = tokenILvl, equipLoc = tokenEquipLoc })
             -- Skip stat check; jump to ilvl comparison below.
         else
             return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                ("tier token not for %s"):format(classToken),
-                { rule = "TIER_TOKEN_MISMATCH", classToken = classToken, allowed = allowed })
+                ("tier token (ilvl %d) not for %s"):format(tokenILvl, classToken),
+                { rule = "TIER_TOKEN_MISMATCH", ilvl = tokenILvl,
+                  classToken = classToken, allowed = allowed })
         end
     end
 
@@ -248,14 +261,24 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     -- Step 10: ilvl comparison
     -- mainSpec branch: compare against currently-equipped (worst slot).
     -- offSpec branch:  compare against the configured equipment-manager set.
-    -- Non-equippable items fall through to the default below.
+    -- Tier tokens reroute to their redeemed slot (or, for Essence wildcards,
+    -- to the worst of the five tier slots). Non-equippable items fall through.
     local isEquippable = equipLoc and Data.EquipLocToSlots[equipLoc] ~= nil
     local isKnownTierToken = itemID and Data.TierTokens[itemID] ~= nil
-    if isEquippable then
+    local isWildcardToken = (tokenEquipLoc == "WILDCARD")
+    if isEquippable or tokenEquipLoc then
         local incomingILvl = effectiveILvl(itemLink)
         local compareILvl, compareLabel
 
-        if specBranch == "off" then
+        if isWildcardToken then
+            local worst
+            for _, loc in ipairs(Data.TierWildcardSlots) do
+                local v = ctx.worstEquippedILvl(loc)
+                if v and (not worst or v < worst) then worst = v end
+            end
+            compareILvl = worst or 0
+            compareLabel = "worst tier slot"
+        elseif specBranch == "off" then
             local setName = cfg.offspec and cfg.offspec.equipmentSet
             if not setName or setName == "" then
                 return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
@@ -270,7 +293,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             end
             compareLabel = ('set "%s"'):format(setName)
         else
-            compareILvl = ctx.worstEquippedILvl(equipLoc)
+            compareILvl = ctx.worstEquippedILvl(tokenEquipLoc or equipLoc)
             compareLabel = "equipped"
         end
 
@@ -298,9 +321,14 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             end
         end
     elseif isKnownTierToken and rollInfo.canNeed then
+        -- Defensive fallback: a tier token whose name doesn't match any known
+        -- slot pattern. Shouldn't happen with current data, but if a future
+        -- tier ships a new naming convention we'd rather Need than silently
+        -- miss it — the user can override per-item if needed.
+        local tokenILvl = effectiveILvl(itemLink)
         return decide(trace, "NEED",
-            "tier token redeemable by class",
-            { rule = "TIER_TOKEN_NEED" })
+            ("tier token (ilvl %d) redeemable by class — slot unknown, defaulting to Need"):format(tokenILvl),
+            { rule = "TIER_TOKEN_NEED_FALLBACK", ilvl = tokenILvl })
     else
         note(trace, "non-equippable item — skipping ilvl check",
             { rule = "NON_EQUIPPABLE", equipLoc = equipLoc })

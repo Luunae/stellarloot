@@ -164,9 +164,26 @@ end
 
 -- ---- Panel layout ----------------------------------------------------------
 
+-- Format the .toc Version field. A clean semver is shown bare; anything else
+-- (git-describe output, unsubstituted @project-version@, "dev" fallback) gets
+-- a "(dev)" marker so it's obvious you're not running a tagged release.
+local function formatVersion(v)
+    if not v or v == "" or v == "dev" or v == "@project-version@" then
+        return "(dev)"
+    end
+    local clean = v:match("^v?(%d+%.%d+%.%d+)$")
+    if clean then
+        return "v" .. clean
+    end
+    local prefixed = (v:sub(1,1) == "v") and v or ("v" .. v)
+    return prefixed .. " (dev)"
+end
+
+local versionText = formatVersion(GetAddOnMetadata and GetAddOnMetadata("StellarLoot", "Version"))
+
 local title = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("StellarLoot")
+title:SetText("StellarLoot — " .. versionText)
 
 local subtitle = makeDescription(scrollChild,
     "Automatically rolls Need / Greed / Pass on group loot based on class, spec, and equipped gear.",
@@ -519,6 +536,11 @@ panel.default = function()
     Config:ResetActive()
     panel.refresh()
 end
+
+-- Modern Settings canvas API does not auto-call panel.refresh on show, so
+-- without this the widgets sit in default visual state and an Okay click
+-- can wipe saved overrides by parsing an empty edit box.
+panel:HookScript("OnShow", function() panel.refresh() end)
 
 -- Register with whichever options system this client provides.
 if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Tier token data
+
+**Tier tokens populated** — `Data.TierTokens` now covers Pandaria raid tier sets T14 (Mogu'shan Vaults / Heart of Fear / Terrace of Endless Spring), T15 (Throne of Thunder), and T16 (Siege of Orgrimmar), including the Heroic Garrosh "Essence of the Cursed" wildcard tokens. 111 item IDs, organized by `Data.TierTokenGroups` (Vanquisher / Protector / Conqueror).
+
+**Tier token ilvl in trace** — the in-game tooltip on a tier token doesn't reveal the ilvl of the gear it redeems for. The decision trace now includes that ilvl alongside every `TIER_TOKEN_MATCH`, `TIER_TOKEN_MISMATCH`, and `TIER_TOKEN_NEED` factor, so `/sl debug` makes the LFR/Normal/Heroic difference visible.
+
 ## 0.3.1 — Drop humanize delay
 
 Removed the 0.8–2.2s pre-roll delay (and its config block). It served no real purpose — the loot client doesn't care how fast a roll arrives, and the delay only added latency between item drops and the addon's response. Rolls are now submitted as soon as the decision is made.
@@ -37,9 +43,6 @@ First public release. Automatic Need / Greed / Pass / Disenchant rolls for World
 - Humanize delay (0.8–2.2s default) before rolling, capped to never miss the roll window.
 - Defers decisions until item info loads; safety-falls-back to the configured action near roll expiry.
 - Persistent decision log (200-entry circular buffer, account-wide).
-
-**Known limitations** (planned for 1.0)
-- Tier token data table is a stub — no specific token IDs are populated yet.
 
 ---
 

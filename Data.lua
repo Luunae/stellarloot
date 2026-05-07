@@ -182,12 +182,213 @@ Data.EquipLocToSlots = {
     INVTYPE_THROWN          = { 16 },
 }
 
--- Tier tokens that grant gear when redeemed: itemID → set of class strings.
--- Stub list; populated as raids are encountered. Items not in this table
--- fall through normal stat-match logic.
+-- Tier-token name prefix → equipLoc the token redeems for. Lets the decision
+-- engine compare a token's ilvl against the gear it would replace.
+Data.TierTokenSlotByName = {
+    Helm      = "INVTYPE_HEAD",
+    Shoulders = "INVTYPE_SHOULDER",
+    Chest     = "INVTYPE_CHEST",
+    Gauntlets = "INVTYPE_HAND",
+    Leggings  = "INVTYPE_LEGS",
+}
+
+-- Slots a Garrosh "Essence" wildcard token can redeem for. Compared via
+-- MIN(equipped ilvl) across the five so a wildcard only Needs when at least
+-- one tier slot is genuinely below the token.
+Data.TierWildcardSlots = {
+    "INVTYPE_HEAD", "INVTYPE_SHOULDER", "INVTYPE_CHEST",
+    "INVTYPE_HAND", "INVTYPE_LEGS",
+}
+
+-- Resolve a tier token's destination slot from its name. Returns:
+--   "WILDCARD" for "Essence of the Cursed ..." (Garrosh-only),
+--   an INVTYPE_* string for fixed-slot tokens,
+--   nil if the name doesn't match any known pattern.
+function Data.TierTokenEquipLoc(name)
+    if not name then return nil end
+    if name:find("^Essence ") then return "WILDCARD" end
+    local first = name:match("^(%S+)")
+    return first and Data.TierTokenSlotByName[first] or nil
+end
+
+-- Tier token class groups (Pandaria). Each MoP raid tier reuses these three
+-- groupings; tokens are named "of the Vanquisher / Protector / Conqueror".
+Data.TierTokenGroups = {
+    VANQUISHER = { DEATHKNIGHT=true, DRUID=true, MAGE=true, ROGUE=true },
+    PROTECTOR  = { HUNTER=true, SHAMAN=true, WARRIOR=true, MONK=true },
+    CONQUEROR  = { PALADIN=true, PRIEST=true, WARLOCK=true },
+}
+
+-- Tier tokens that grant gear when redeemed: itemID → class set.
+-- Populated for Pandaria raid tiers T14-T16. Unknown tokens hit the stat
+-- check in Decision.lua step 9 (tokens have no primary stat) and silently
+-- default to Greed/Pass — populate this table when new tier content lands.
+local V, P, C = Data.TierTokenGroups.VANQUISHER,
+                Data.TierTokenGroups.PROTECTOR,
+                Data.TierTokenGroups.CONQUEROR
 Data.TierTokens = {
-    -- Throne of Thunder T15 (examples; expand as needed)
-    -- [95620] = { ROGUE=true, MONK=true, DEATHKNIGHT=true }, -- Helm of the Vanquisher
+    -- ===== T14: Mogu'shan Vaults / Heart of Fear / Terrace of Endless Spring =====
+    -- Helms
+    [89273] = V,  -- Helm of the Shadowy Vanquisher  [ilvl: 483]
+    [89234] = V,  -- Helm of the Shadowy Vanquisher  [ilvl: 496]
+    [89258] = V,  -- Helm of the Shadowy Vanquisher  [ilvl: 509]
+    [89275] = P,  -- Helm of the Shadowy Protector  [ilvl: 483]
+    [89236] = P,  -- Helm of the Shadowy Protector  [ilvl: 496]
+    [89260] = P,  -- Helm of the Shadowy Protector  [ilvl: 509]
+    [89274] = C,  -- Helm of the Shadowy Conqueror  [ilvl: 483]
+    [89235] = C,  -- Helm of the Shadowy Conqueror  [ilvl: 496]
+    [89259] = C,  -- Helm of the Shadowy Conqueror  [ilvl: 509]
+    -- Shoulders
+    [89276] = V,  -- Shoulders of the Shadowy Vanquisher  [ilvl: 483]
+    [89248] = V,  -- Shoulders of the Shadowy Vanquisher  [ilvl: 496]
+    [89261] = V,  -- Shoulders of the Shadowy Vanquisher  [ilvl: 509]
+    [89278] = P,  -- Shoulders of the Shadowy Protector  [ilvl: 483]
+    [89247] = P,  -- Shoulders of the Shadowy Protector  [ilvl: 496]
+    [89263] = P,  -- Shoulders of the Shadowy Protector  [ilvl: 509]
+    [89277] = C,  -- Shoulders of the Shadowy Conqueror  [ilvl: 483]
+    [89246] = C,  -- Shoulders of the Shadowy Conqueror  [ilvl: 496]
+    [89262] = C,  -- Shoulders of the Shadowy Conqueror  [ilvl: 509]
+    -- Chest
+    [89264] = V,  -- Chest of the Shadowy Vanquisher  [ilvl: 483]
+    [89239] = V,  -- Chest of the Shadowy Vanquisher  [ilvl: 496]
+    [89249] = V,  -- Chest of the Shadowy Vanquisher  [ilvl: 509]
+    [89266] = P,  -- Chest of the Shadowy Protector  [ilvl: 483]
+    [89238] = P,  -- Chest of the Shadowy Protector  [ilvl: 496]
+    [89251] = P,  -- Chest of the Shadowy Protector  [ilvl: 509]
+    [89265] = C,  -- Chest of the Shadowy Conqueror  [ilvl: 483]
+    [89237] = C,  -- Chest of the Shadowy Conqueror  [ilvl: 496]
+    [89250] = C,  -- Chest of the Shadowy Conqueror  [ilvl: 509]
+    -- Gauntlets
+    [89270] = V,  -- Gauntlets of the Shadowy Vanquisher  [ilvl: 483]
+    [89242] = V,  -- Gauntlets of the Shadowy Vanquisher  [ilvl: 496]
+    [89255] = V,  -- Gauntlets of the Shadowy Vanquisher  [ilvl: 509]
+    [89272] = P,  -- Gauntlets of the Shadowy Protector  [ilvl: 483]
+    [89241] = P,  -- Gauntlets of the Shadowy Protector  [ilvl: 496]
+    [89257] = P,  -- Gauntlets of the Shadowy Protector  [ilvl: 509]
+    [89271] = C,  -- Gauntlets of the Shadowy Conqueror  [ilvl: 483]
+    [89240] = C,  -- Gauntlets of the Shadowy Conqueror  [ilvl: 496]
+    [89256] = C,  -- Gauntlets of the Shadowy Conqueror  [ilvl: 509]
+    -- Leggings
+    [89267] = V,  -- Leggings of the Shadowy Vanquisher  [ilvl: 483]
+    [89245] = V,  -- Leggings of the Shadowy Vanquisher  [ilvl: 496]
+    [89252] = V,  -- Leggings of the Shadowy Vanquisher  [ilvl: 509]
+    [89269] = P,  -- Leggings of the Shadowy Protector  [ilvl: 483]
+    [89244] = P,  -- Leggings of the Shadowy Protector  [ilvl: 496]
+    [89254] = P,  -- Leggings of the Shadowy Protector  [ilvl: 509]
+    [89268] = C,  -- Leggings of the Shadowy Conqueror  [ilvl: 483]
+    [89243] = C,  -- Leggings of the Shadowy Conqueror  [ilvl: 496]
+    [89253] = C,  -- Leggings of the Shadowy Conqueror  [ilvl: 509]
+
+    -- ===== T15: Throne of Thunder =====
+    -- Helms
+    [95879] = V,  -- Helm of the Crackling Vanquisher  [ilvl: 502]
+    [95571] = V,  -- Helm of the Crackling Vanquisher  [ilvl: 522]
+    [96623] = V,  -- Helm of the Crackling Vanquisher  [ilvl: 535]
+    [95881] = P,  -- Helm of the Crackling Protector  [ilvl: 502]
+    [95582] = P,  -- Helm of the Crackling Protector  [ilvl: 522]
+    [96625] = P,  -- Helm of the Crackling Protector  [ilvl: 535]
+    [95880] = C,  -- Helm of the Crackling Conqueror  [ilvl: 502]
+    [95577] = C,  -- Helm of the Crackling Conqueror  [ilvl: 522]
+    [96624] = C,  -- Helm of the Crackling Conqueror  [ilvl: 535]
+    -- Shoulders
+    [95955] = V,  -- Shoulders of the Crackling Vanquisher  [ilvl: 502]
+    [95573] = V,  -- Shoulders of the Crackling Vanquisher  [ilvl: 522]
+    [96699] = V,  -- Shoulders of the Crackling Vanquisher  [ilvl: 535]
+    [95957] = P,  -- Shoulders of the Crackling Protector  [ilvl: 502]
+    [95583] = P,  -- Shoulders of the Crackling Protector  [ilvl: 522]
+    [96701] = P,  -- Shoulders of the Crackling Protector  [ilvl: 535]
+    [95956] = C,  -- Shoulders of the Crackling Conqueror  [ilvl: 502]
+    [95578] = C,  -- Shoulders of the Crackling Conqueror  [ilvl: 522]
+    [96700] = C,  -- Shoulders of the Crackling Conqueror  [ilvl: 535]
+    -- Chest
+    [95822] = V,  -- Chest of the Crackling Vanquisher  [ilvl: 502]
+    [95569] = V,  -- Chest of the Crackling Vanquisher  [ilvl: 522]
+    [96566] = V,  -- Chest of the Crackling Vanquisher  [ilvl: 535]
+    [95824] = P,  -- Chest of the Crackling Protector  [ilvl: 502]
+    [95579] = P,  -- Chest of the Crackling Protector  [ilvl: 522]
+    [96568] = P,  -- Chest of the Crackling Protector  [ilvl: 535]
+    [95823] = C,  -- Chest of the Crackling Conqueror  [ilvl: 502]
+    [95574] = C,  -- Chest of the Crackling Conqueror  [ilvl: 522]
+    [96567] = C,  -- Chest of the Crackling Conqueror  [ilvl: 535]
+    -- Gauntlets
+    [95855] = V,  -- Gauntlets of the Crackling Vanquisher  [ilvl: 502]
+    [95570] = V,  -- Gauntlets of the Crackling Vanquisher  [ilvl: 522]
+    [96599] = V,  -- Gauntlets of the Crackling Vanquisher  [ilvl: 535]
+    [95857] = P,  -- Gauntlets of the Crackling Protector  [ilvl: 502]
+    [95580] = P,  -- Gauntlets of the Crackling Protector  [ilvl: 522]
+    [96601] = P,  -- Gauntlets of the Crackling Protector  [ilvl: 535]
+    [95856] = C,  -- Gauntlets of the Crackling Conqueror  [ilvl: 502]
+    [95575] = C,  -- Gauntlets of the Crackling Conqueror  [ilvl: 522]
+    [96600] = C,  -- Gauntlets of the Crackling Conqueror  [ilvl: 535]
+    -- Leggings
+    [95887] = V,  -- Leggings of the Crackling Vanquisher  [ilvl: 502]
+    [95572] = V,  -- Leggings of the Crackling Vanquisher  [ilvl: 522]
+    [96631] = V,  -- Leggings of the Crackling Vanquisher  [ilvl: 535]
+    [95889] = P,  -- Leggings of the Crackling Protector  [ilvl: 502]
+    [95581] = P,  -- Leggings of the Crackling Protector  [ilvl: 522]
+    [96633] = P,  -- Leggings of the Crackling Protector  [ilvl: 535]
+    [95888] = C,  -- Leggings of the Crackling Conqueror  [ilvl: 502]
+    [95576] = C,  -- Leggings of the Crackling Conqueror  [ilvl: 522]
+    [96632] = C,  -- Leggings of the Crackling Conqueror  [ilvl: 535]
+
+    -- ===== T16: Siege of Orgrimmar =====
+    -- Helms
+    [99671] = V,  -- Helm of the Cursed Vanquisher  [ilvl: 528]
+    [99683] = V,  -- Helm of the Cursed Vanquisher  [ilvl: 553]
+    [99723] = V,  -- Helm of the Cursed Vanquisher  [ilvl: 566]
+    [99673] = P,  -- Helm of the Cursed Protector  [ilvl: 528]
+    [99694] = P,  -- Helm of the Cursed Protector  [ilvl: 553]
+    [99725] = P,  -- Helm of the Cursed Protector  [ilvl: 566]
+    [99672] = C,  -- Helm of the Cursed Conqueror  [ilvl: 528]
+    [99689] = C,  -- Helm of the Cursed Conqueror  [ilvl: 553]
+    [99724] = C,  -- Helm of the Cursed Conqueror  [ilvl: 566]
+    -- Shoulders
+    [99668] = V,  -- Shoulders of the Cursed Vanquisher  [ilvl: 528]
+    [99685] = V,  -- Shoulders of the Cursed Vanquisher  [ilvl: 553]
+    [99717] = V,  -- Shoulders of the Cursed Vanquisher  [ilvl: 566]
+    [99670] = P,  -- Shoulders of the Cursed Protector  [ilvl: 528]
+    [99695] = P,  -- Shoulders of the Cursed Protector  [ilvl: 553]
+    [99719] = P,  -- Shoulders of the Cursed Protector  [ilvl: 566]
+    [99669] = C,  -- Shoulders of the Cursed Conqueror  [ilvl: 528]
+    [99690] = C,  -- Shoulders of the Cursed Conqueror  [ilvl: 553]
+    [99718] = C,  -- Shoulders of the Cursed Conqueror  [ilvl: 566]
+    -- Chest
+    [99677] = V,  -- Chest of the Cursed Vanquisher  [ilvl: 528]
+    [99696] = V,  -- Chest of the Cursed Vanquisher  [ilvl: 553]
+    [99714] = V,  -- Chest of the Cursed Vanquisher  [ilvl: 566]
+    [99679] = P,  -- Chest of the Cursed Protector  [ilvl: 528]
+    [99691] = P,  -- Chest of the Cursed Protector  [ilvl: 553]
+    [99716] = P,  -- Chest of the Cursed Protector  [ilvl: 566]
+    [99678] = C,  -- Chest of the Cursed Conqueror  [ilvl: 528]
+    [99686] = C,  -- Chest of the Cursed Conqueror  [ilvl: 553]
+    [99715] = C,  -- Chest of the Cursed Conqueror  [ilvl: 566]
+    -- Gauntlets
+    [99680] = V,  -- Gauntlets of the Cursed Vanquisher  [ilvl: 528]
+    [99682] = V,  -- Gauntlets of the Cursed Vanquisher  [ilvl: 553]
+    [99720] = V,  -- Gauntlets of the Cursed Vanquisher  [ilvl: 566]
+    [99667] = P,  -- Gauntlets of the Cursed Protector  [ilvl: 528]
+    [99692] = P,  -- Gauntlets of the Cursed Protector  [ilvl: 553]
+    [99722] = P,  -- Gauntlets of the Cursed Protector  [ilvl: 566]
+    [99681] = C,  -- Gauntlets of the Cursed Conqueror  [ilvl: 528]
+    [99687] = C,  -- Gauntlets of the Cursed Conqueror  [ilvl: 553]
+    [99721] = C,  -- Gauntlets of the Cursed Conqueror  [ilvl: 566]
+    -- Leggings
+    [99674] = V,  -- Leggings of the Cursed Vanquisher  [ilvl: 528]
+    [99684] = V,  -- Leggings of the Cursed Vanquisher  [ilvl: 553]
+    [99726] = V,  -- Leggings of the Cursed Vanquisher  [ilvl: 566]
+    [99676] = P,  -- Leggings of the Cursed Protector  [ilvl: 528]
+    [99693] = P,  -- Leggings of the Cursed Protector  [ilvl: 553]
+    [99713] = P,  -- Leggings of the Cursed Protector  [ilvl: 566]
+    [99675] = C,  -- Leggings of the Cursed Conqueror  [ilvl: 528]
+    [99688] = C,  -- Leggings of the Cursed Conqueror  [ilvl: 553]
+    [99712] = C,  -- Leggings of the Cursed Conqueror  [ilvl: 566]
+    -- Essence (Garrosh — wildcard, redeemable for any tier slot)
+    [105859] = V,  -- Essence of the Cursed Vanquisher  [ilvl: 553]
+    [105868] = V,  -- Essence of the Cursed Vanquisher  [ilvl: 566]
+    [105857] = P,  -- Essence of the Cursed Protector  [ilvl: 553]
+    [105866] = P,  -- Essence of the Cursed Protector  [ilvl: 566]
+    [105858] = C,  -- Essence of the Cursed Conqueror  [ilvl: 553]
+    [105867] = C,  -- Essence of the Cursed Conqueror  [ilvl: 566]
 }
 
 -- rollType constants for RollOnLoot
