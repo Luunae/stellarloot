@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — Fix version display
+
+**Version in panel title now resolves** — the 0.4.0 lookup used the global `GetAddOnMetadata`, which has been moved to `C_AddOns.GetAddOnMetadata` on modern clients (including MoP Classic 5.5.0). The global was nil, so the title fell back to `(dev)` even on a properly-packaged release. Now prefers `C_AddOns.GetAddOnMetadata` and falls back to the global.
+
 ## 0.4.0 — Tier token data
 
 **Tier tokens populated** — `Data.TierTokens` now covers Pandaria raid tier sets T14 (Mogu'shan Vaults / Heart of Fear / Terrace of Endless Spring), T15 (Throne of Thunder), and T16 (Siege of Orgrimmar), including the Heroic Garrosh "Essence of the Cursed" wildcard tokens. 111 item IDs, organized by `Data.TierTokenGroups` (Vanquisher / Protector / Conqueror).

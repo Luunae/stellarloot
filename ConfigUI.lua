@@ -179,7 +179,8 @@ local function formatVersion(v)
     return prefixed .. " (dev)"
 end
 
-local versionText = formatVersion(GetAddOnMetadata and GetAddOnMetadata("StellarLoot", "Version"))
+local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+local versionText = formatVersion(getMeta and getMeta("StellarLoot", "Version"))
 
 local title = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
