@@ -4,7 +4,7 @@
 
 **Tier tokens populated** — `Data.TierTokens` now covers Pandaria raid tier sets T14 (Mogu'shan Vaults / Heart of Fear / Terrace of Endless Spring), T15 (Throne of Thunder), and T16 (Siege of Orgrimmar), including the Heroic Garrosh "Essence of the Cursed" wildcard tokens. 111 item IDs, organized by `Data.TierTokenGroups` (Vanquisher / Protector / Conqueror).
 
-**Tier token ilvl in trace** — the in-game tooltip on a tier token doesn't reveal the ilvl of the gear it redeems for. The decision trace now includes that ilvl alongside every `TIER_TOKEN_MATCH`, `TIER_TOKEN_MISMATCH`, and `TIER_TOKEN_NEED` factor, so `/sl debug` makes the LFR/Normal/Heroic difference visible.
+**Tier token ilvl in trace** — the in-game tooltip on a tier token doesn't reveal the ilvl of the gear it redeems for. The decision trace now includes that ilvl alongside every `TIER_TOKEN_MATCH`, `TIER_TOKEN_MISMATCH`, and `TIER_TOKEN_NEED` factor, so `/sl eval <itemLink>` makes the LFR/Normal/Heroic difference visible.
 
 **Options panel sync fix** — the modern Settings canvas API doesn't auto-call `panel.refresh()` on show, so widgets sat in their default visual state on every login and clicking Okay parsed an empty overrides edit box, wiping the saved overrides table. The panel now refreshes on `OnShow`. Saved data itself was always intact; only the UI was out of sync.
 
