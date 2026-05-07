@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # devbuild.sh — produce a local addon build at build/StellarLoot/ for dev testing.
-# Copy build/StellarLoot/ into <WoW>/_classic_/Interface/AddOns/ to install.
+#
+# Usage:
+#   ./devbuild.sh           Build only. Output: build/StellarLoot/.
+#   ./devbuild.sh deploy    Build, then sync into "$STELLARLOOT_ADDONS_DIR/StellarLoot/"
+#                           so a /reload in WoW picks it up. Set the env var to your
+#                           WoW AddOns folder, e.g.:
+#                             export STELLARLOOT_ADDONS_DIR="$HOME/.local/share/Steam/\
+#                             steamapps/compatdata/<id>/pfx/drive_c/Program Files (x86)/\
+#                             World of Warcraft/_classic_/Interface/AddOns"
 #
 # Output is the working tree (not just HEAD), so uncommitted edits are included.
 # Version string in the .toc is set from `git describe --tags --always --dirty`.
@@ -11,6 +19,17 @@
 
 set -euo pipefail
 cd "$(dirname "$0")"
+
+MODE="${1:-build}"
+case "$MODE" in
+    build|deploy) ;;
+    *) echo "error: unknown mode '$MODE' (expected 'build' or 'deploy')" >&2; exit 2 ;;
+esac
+
+if [[ "$MODE" == "deploy" && -z "${STELLARLOOT_ADDONS_DIR:-}" ]]; then
+    echo "error: deploy mode requires STELLARLOOT_ADDONS_DIR to point at your WoW AddOns folder" >&2
+    exit 2
+fi
 
 TOC="StellarLoot.toc"
 OUT="build/StellarLoot"
@@ -49,4 +68,16 @@ done
 sed -i "s/@project-version@/${VERSION}/" "$OUT/$TOC"
 
 echo "Built $OUT (version: $VERSION, ${#FILES[@]} source files)"
-echo "Copy the directory into <WoW>/_classic_/Interface/AddOns/ to install."
+
+if [[ "$MODE" == "deploy" ]]; then
+    DEST="$STELLARLOOT_ADDONS_DIR/StellarLoot"
+    if [[ ! -d "$STELLARLOOT_ADDONS_DIR" ]]; then
+        echo "error: AddOns dir does not exist: $STELLARLOOT_ADDONS_DIR" >&2
+        exit 1
+    fi
+    rm -rf "$DEST"
+    cp -r "$OUT" "$DEST"
+    echo "Deployed to $DEST — /reload in WoW to pick up."
+else
+    echo "Copy the directory into <WoW>/_classic_/Interface/AddOns/ to install."
+fi
