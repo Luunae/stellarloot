@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2 — Fix version display (for real this time)
+
+**Version in panel title now actually resolves on CF builds** — the 0.4.0 panel-title check used a bare `"@project-version@"` literal in `ConfigUI.lua` to detect unsubstituted dev builds. The CF packager's keyword substitution runs across `.lua` too (not just `.toc`), so on a packaged release that literal got replaced with the real version (e.g. `"v0.4.1"`), turning the guard into `if v == "v0.4.1" then return "(dev)" end` — self-defeating. The placeholder is now assembled at runtime from two strings, so the packager's text replacement leaves it intact. 0.4.1's `C_AddOns.GetAddOnMetadata` fallback was correct as defensive code but did not address this bug.
+
 ## 0.4.1 — Fix version display
 
 **Version in panel title now resolves** — the 0.4.0 lookup used the global `GetAddOnMetadata`, which has been moved to `C_AddOns.GetAddOnMetadata` on modern clients (including MoP Classic 5.5.0). The global was nil, so the title fell back to `(dev)` even on a properly-packaged release. Now prefers `C_AddOns.GetAddOnMetadata` and falls back to the global.

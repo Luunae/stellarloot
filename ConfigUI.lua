@@ -165,10 +165,16 @@ end
 -- ---- Panel layout ----------------------------------------------------------
 
 -- Format the .toc Version field. A clean semver is shown bare; anything else
--- (git-describe output, unsubstituted @project-version@, "dev" fallback) gets
--- a "(dev)" marker so it's obvious you're not running a tagged release.
+-- (git-describe output, unsubstituted placeholder, "dev" fallback) gets a
+-- "(dev)" marker so it's obvious you're not running a tagged release.
+--
+-- The unsubstituted-placeholder literal must be assembled at runtime: the CF
+-- packager does keyword substitution across .lua too, not just .toc, so a
+-- bare "@project-version@" in source would be replaced with the real version
+-- at package time and turn this guard into a self-defeating check.
+local UNSUBSTITUTED = "@" .. "project-version@"
 local function formatVersion(v)
-    if not v or v == "" or v == "dev" or v == "@project-version@" then
+    if not v or v == "" or v == "dev" or v == UNSUBSTITUTED then
         return "(dev)"
     end
     local clean = v:match("^v?(%d+%.%d+%.%d+)$")
