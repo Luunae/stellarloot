@@ -22,6 +22,7 @@ local function printHelp()
     Log:Info("  /stellarloot perchar          toggle per-character settings on this character")
     Log:Info("  /stellarloot override <id> <need|greed|pass|clear>")
     Log:Info("  /stellarloot eval <itemLink>  print what would be rolled for the linked item")
+    Log:Info("  /stellarloot heirloom <link>  show heirloom recognition + effective ilvl")
 end
 
 local function cmdStatus()
@@ -33,12 +34,9 @@ local function cmdStatus()
         tostring(cfg.enabled), tostring(cfg.testMode),
         tostring(PlayerState.classToken), tostring(PlayerState.specName),
         stat))
-    Log:Info(("filters: qualityFilter=%s minQuality=%s requireUpgrade=%s needMargin=%d"):format(
-        tostring(cfg.qualityFilterEnabled),
-        Data.QualityNames[cfg.minQuality] or cfg.minQuality,
-        tostring(cfg.requireILvlUpgrade), cfg.needILvlMargin))
-    Log:Info(("behavior: greedUnusable=%s fallback=%s"):format(
-        tostring(cfg.greedUnusable), tostring(cfg.fallbackAction)))
+    Log:Info(("filters: requireUpgrade=%s needMargin=%d fallback=%s"):format(
+        tostring(cfg.requireILvlUpgrade), cfg.needILvlMargin,
+        tostring(cfg.fallbackAction)))
     local off = cfg.offspec or {}
     local offStat = Data.PrimaryStatName[PlayerState.offspecPrimaryStat] or "?"
     local offSet = off.equipmentSet and ('"' .. off.equipmentSet .. '"') or "(none)"
@@ -83,6 +81,29 @@ local function cmdOverride(args)
         Log:Info(("set override: %d → %s"):format(id, action))
     else
         Log:Warn("unknown action: " .. action)
+    end
+end
+
+local function cmdHeirloom(args)
+    local link = args:match("(|%x+|Hitem:.-|h.-|h|r)") or args:match("(item:%d[%d:]*)")
+    if not link then
+        Log:Warn("usage: /stellarloot heirloom <item link>  (shift-click an item into chat)")
+        return
+    end
+    local name, _, quality = GetItemInfo(link)
+    if not name then
+        Log:Warn("item info not cached yet — try again in a moment")
+        return
+    end
+    local itemID = tonumber(link:match("item:(%d+)"))
+    local isHeirloom = (quality == Data.QUALITY_HEIRLOOM)
+    local apiILvl = _G.GetDetailedItemLevelInfo and _G.GetDetailedItemLevelInfo(link) or 0
+    local effective = Data.EffectiveILvl(link)
+    Log:Info(("heirloom: %s [%s]"):format(name, tostring(itemID)))
+    Log:Info(("  isHeirloom: %s   API ilvl: %d   effective ilvl: %d"):format(
+        tostring(isHeirloom), apiILvl or 0, effective))
+    if isHeirloom then
+        Log:Info(("  → substituted Data.HEIRLOOM_ILVL = %d"):format(Data.HEIRLOOM_ILVL))
     end
 end
 
@@ -146,6 +167,8 @@ SlashCmdList["STELLARLOOT"] = function(msg)
         cmdOverride(rest)
     elseif cmd == "eval" then
         cmdEval(rest)
+    elseif cmd == "heirloom" then
+        cmdHeirloom(rest)
     elseif cmd == "log" then
         cmdLog(rest)
     else

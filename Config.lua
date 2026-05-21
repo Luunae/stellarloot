@@ -15,14 +15,13 @@ Config.DEFAULTS = {
     version = 1,
     enabled = true,
     testMode = false,                 -- print decisions, don't actually roll
-    -- Quality filter
-    qualityFilterEnabled = true,
-    minQuality = 2,                   -- 0 poor … 4 epic
-    -- Upgrade filter
-    requireILvlUpgrade = true,
+    -- Upgrade filter. Default off: ilvl is an unreliable signal of item value
+    -- across expansions and on irregularly-budgeted items (BoAs, PvP gear,
+    -- heirlooms). Stat-match alone is the more honest signal. Turn on for
+    -- stricter endgame behavior.
+    requireILvlUpgrade = false,
     needILvlMargin = 0,               -- ilvls beyond equipped required for Need
-    -- Behavior toggles
-    greedUnusable = true,
+    heirloomNeedMarginExtra = 0,      -- extra margin when the slot we'd replace holds a heirloom (XP-bonus stickiness)
     fallbackAction = "GREED",         -- GREED | PASS | NEED | MANUAL
     overrides = {},                   -- [itemID] = "NEED" | "GREED" | "PASS"
     classOverrides = {

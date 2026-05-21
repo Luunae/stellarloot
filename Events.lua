@@ -110,6 +110,13 @@ local function onConfirmLootRoll(rollID, rollType)
 end
 
 local function onItemInfoReceived(itemID, success)
+    -- An equipped-slot snapshot may have read ilvl 0 at login because this
+    -- item wasn't cached yet; now that it's loaded, re-read that slot. Done
+    -- regardless of whether a roll is pending on this itemID.
+    if success then
+        PlayerState:ResolvePendingSlot(itemID)
+    end
+
     local waiting = Events.pendingByItemID[itemID]
     if not waiting then return end
     Events.pendingByItemID[itemID] = nil

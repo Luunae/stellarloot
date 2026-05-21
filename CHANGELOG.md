@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 — Stat-only default, simpler everywhere
+
+**Ilvl-upgrade requirement now defaults OFF.** Decisions default to "stat-matching item → Need" without an ilvl-delta check. Item level is an unreliable signal of item value: it skews wildly across expansions, on PvP gear, on BoAs, and on heirlooms (which report ilvl 1 in inventory). Stat-match is the more honest "do I want this?" signal. Existing users keep their saved setting; only fresh installs (and `Reset`) pick up the new default. Toggle **Need only on item-level upgrades** in the options panel for stricter endgame behavior.
+
+**Stat-only mode skips the off-spec equipment set requirement.** Previously off-spec match required an in-game equipment set as the ilvl comparison source. With ilvl filtering off, the set is no longer needed; off-spec stat matches Need outright. The set is still used when ilvl filtering is on.
+
+**Heirloom handling** — quality-7 heirlooms now substitute a single flat synthetic ilvl (`Data.HEIRLOOM_ILVL = 400`) anywhere their effective ilvl is computed. Previously they reported ilvl 1 to the API and triggered false Needs on every drop when ilvl filtering was on. Effective-ilvl resolution is centralized in `Data.EffectiveILvl` so the equipped side, the incoming side, and the equipment-set side all share the same logic.
+
+**`/sl heirloom <link>` debug helper** — confirms whether an item is recognized as a heirloom and prints both the API-reported and the effective ilvl.
+
+**Fixed: equipped item level could stick at 0 after login.** `RefreshAllSlots` runs once at `PLAYER_LOGIN`, when an equipped item often isn't in the client cache yet — `GetDetailedItemLevelInfo`/`GetItemInfo` then return 0, and the slot was only re-read on `PLAYER_EQUIPMENT_CHANGED` (which fires only when gear actually changes). A slot that read 0 stayed 0 for the whole session, so every same-slot roll compared against 0 and triggered a false Need. Slots that resolve to 0 are now tracked and re-read on `GET_ITEM_INFO_RECEIVED` once the item finishes loading.
+
+**Verbose logging now covers equipped-slot refresh.** With `/sl verbose` on, the addon logs when a slot's item level can't be read at login — queued for a deferred re-read — and again when that re-read resolves it. Silent unless verbose is enabled; a way to confirm the fix above engaged.
+
+**Removed: quality filter.** The `minQuality` / `qualityFilterEnabled` config and its UI row are gone — group loot does not surface sub-Uncommon items, so the filter was dead weight.
+
+**Removed: `greedUnusable` toggle.** Items the class cannot equip now always Greed (Pass if Greed isn't offered). The previous opt-out toggle and its UI row are gone.
+
+**Optional heirloom stickiness retained** — config `heirloomNeedMarginExtra` (default 0) still exists as a hidden knob; when set and ilvl filtering is on, it pads the upgrade margin required to displace a heirloom.
+
 ## 0.4.2 — Fix version display (for real this time)
 
 **Version in panel title now actually resolves on CF builds** — the 0.4.0 panel-title check used a bare `"@project-version@"` literal in `ConfigUI.lua` to detect unsubstituted dev builds. The CF packager's keyword substitution runs across `.lua` too (not just `.toc`), so on a packaged release that literal got replaced with the real version (e.g. `"v0.4.1"`), turning the guard into `if v == "v0.4.1" then return "(dev)" end` — self-defeating. The placeholder is now assembled at runtime from two strings, so the packager's text replacement leaves it intact. 0.4.1's `C_AddOns.GetAddOnMetadata` fallback was correct as defensive code but did not address this bug.

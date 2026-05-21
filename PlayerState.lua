@@ -29,6 +29,17 @@ local function getActiveSpecGroup()
     return nil
 end
 
+-- Verbose-gated diagnostic line. Config and Log both load *after* this file
+-- (see StellarLoot.toc), so neither can be captured at file scope — resolve
+-- them lazily here. Every caller runs at/after PLAYER_LOGIN, by which point
+-- both modules exist.
+local function debugLog(msg)
+    local cfg = StellarLoot.Config and StellarLoot.Config:Get()
+    if cfg and cfg.log and cfg.log.verbose and StellarLoot.Log then
+        StellarLoot.Log:Info(msg)
+    end
+end
+
 local PlayerState = {
     classID = nil,         -- numeric class ID
     classToken = nil,      -- "MAGE", "WARRIOR", etc.
@@ -39,7 +50,9 @@ local PlayerState = {
     role = nil,            -- "TANK", "HEALER", "DAMAGER"
     isHealer = false,
     enchantingSkill = 0,
-    equippedILvl = {},     -- [invSlot] = ilvl number
+    equippedILvl = {},        -- [invSlot] = ilvl number (heirloom synthetic applied)
+    equippedHeirloom = {},    -- [invSlot] = true if the equipped item is a heirloom
+    pendingSlots = {},        -- [invSlot] = itemID for slots whose ilvl read 0 (item not cached yet)
 
     -- Off-spec (populated by RefreshOffSpec; nil when disabled or unavailable)
     offspecSpecID = nil,
@@ -49,16 +62,8 @@ local PlayerState = {
 }
 StellarLoot.PlayerState = PlayerState
 
-local function getDetailedItemLevel(link)
-    if not link then return 0 end
-    local fn = _G.GetDetailedItemLevelInfo
-    if fn then
-        local ilvl = fn(link)
-        if ilvl and ilvl > 0 then return ilvl end
-    end
-    local _, _, _, baseILvl = GetItemInfo(link)
-    return baseILvl or 0
-end
+-- Effective ilvl resolution lives in Data.EffectiveILvl so the equipped-side
+-- snapshot and the incoming-roll side (Decision) share heirloom handling.
 
 function PlayerState:RefreshClass()
     local className, classToken, classID = UnitClass("player")
@@ -137,7 +142,34 @@ end
 function PlayerState:RefreshSlot(slot)
     if not slot or slot < 1 then return end
     local link = GetInventoryItemLink("player", slot)
-    self.equippedILvl[slot] = link and getDetailedItemLevel(link) or 0
+    if link then
+        local ilvl, isHeirloom = Data.EffectiveILvl(link)
+        self.equippedILvl[slot] = ilvl
+        self.equippedHeirloom[slot] = isHeirloom or nil
+        -- A non-empty slot resolving to ilvl 0 means the item isn't in the
+        -- client cache yet — common at PLAYER_LOGIN, especially for upgraded
+        -- items whose ilvl needs the server's upgrade data. Remember the
+        -- itemID so GET_ITEM_INFO_RECEIVED can re-read the slot. Otherwise it
+        -- stays a stale 0 and every same-slot roll looks like a huge upgrade.
+        --
+        -- TODO: this gates "pending" on ilvl == 0 only. If an upgraded item's
+        -- detailed ilvl hasn't resolved yet, Data.EffectiveILvl can return its
+        -- non-zero *base* ilvl instead — which slips past this check, so the
+        -- slot is never re-read and the equipped snapshot stays understated.
+        -- Needs in-client verification with upgraded gear before fixing.
+        if ilvl == 0 then
+            local pendingID = tonumber(link:match("item:(%d+)"))
+            self.pendingSlots[slot] = pendingID
+            debugLog(("slot %d: item %s info not loaded — ilvl unresolved, queued for re-read")
+                :format(slot, tostring(pendingID)))
+        else
+            self.pendingSlots[slot] = nil
+        end
+    else
+        self.equippedILvl[slot] = 0
+        self.equippedHeirloom[slot] = nil
+        self.pendingSlots[slot] = nil
+    end
 end
 
 function PlayerState:RefreshAllSlots()
@@ -148,16 +180,42 @@ function PlayerState:RefreshAllSlots()
     end
 end
 
--- Best-of-comparison ilvl across all slots an equipLoc could fill.
+-- Re-read any equipped slot whose ilvl previously resolved to 0 because the
+-- item wasn't cached. Called from the GET_ITEM_INFO_RECEIVED handler once the
+-- named item finishes loading. Returns true if a slot was updated.
+function PlayerState:ResolvePendingSlot(itemID)
+    if not itemID then return false end
+    local updated = false
+    -- RefreshSlot only mutates pendingSlots[slot] for the slot it's given, so
+    -- clearing the current key mid-iteration is safe in Lua 5.1.
+    for slot, pendingID in pairs(self.pendingSlots) do
+        if pendingID == itemID then
+            self:RefreshSlot(slot)
+            updated = true
+            if not self.pendingSlots[slot] then
+                debugLog(("slot %d: re-read after item load — ilvl %d")
+                    :format(slot, self.equippedILvl[slot] or 0))
+            end
+        end
+    end
+    return updated
+end
+
+-- Worst-of-comparison ilvl across all slots an equipLoc could fill. Returns
+-- (ilvl, isHeirloom) where isHeirloom reflects the slot that produced the worst
+-- ilvl (i.e. the one we'd be replacing) — used by Decision to pad needILvlMargin.
 function PlayerState:WorstEquippedILvl(equipLoc)
     local slots = Data.EquipLocToSlots[equipLoc]
-    if not slots then return 0 end
-    local worst
+    if not slots then return 0, false end
+    local worst, worstHeirloom
     for _, slot in ipairs(slots) do
         local ilvl = self.equippedILvl[slot] or 0
-        if not worst or ilvl < worst then worst = ilvl end
+        if not worst or ilvl < worst then
+            worst = ilvl
+            worstHeirloom = self.equippedHeirloom[slot] or false
+        end
     end
-    return worst or 0
+    return worst or 0, worstHeirloom or false
 end
 
 -- Resolve the item link the named equipment set assigns to a given inv slot.
@@ -183,22 +241,25 @@ function PlayerState:GetEquipmentSetItemLink(setName, invSlot)
     return nil
 end
 
--- Worst ilvl across the slots an equipLoc maps to, but using items from an
--- equipment set rather than what's currently equipped. Returns nil if the set
--- has no items in any of those slots (caller should treat that as "no
--- comparison possible").
+-- Worst ilvl across the slots an equipLoc maps to, using items from an
+-- equipment set rather than what's currently equipped. Returns (ilvl,
+-- isHeirloom) — ilvl is nil if the set has no items in any of those slots
+-- (caller treats that as "no comparison possible").
 function PlayerState:WorstSetILvl(equipLoc, setName)
     local slots = Data.EquipLocToSlots[equipLoc]
-    if not slots or not setName then return nil end
-    local worst
+    if not slots or not setName then return nil, false end
+    local worst, worstHeirloom
     for _, slot in ipairs(slots) do
         local link = self:GetEquipmentSetItemLink(setName, slot)
         if link then
-            local ilvl = getDetailedItemLevel(link)
-            if not worst or ilvl < worst then worst = ilvl end
+            local ilvl, isHeirloom = Data.EffectiveILvl(link)
+            if not worst or ilvl < worst then
+                worst = ilvl
+                worstHeirloom = isHeirloom or false
+            end
         end
     end
-    return worst
+    return worst, worstHeirloom or false
 end
 
 -- Enumerate equipment set names. Returns a sorted list.

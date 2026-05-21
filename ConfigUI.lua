@@ -235,40 +235,14 @@ local cbTestDesc = makeDescription(scrollChild,
     "Decisions print to chat as 'WOULD GREED [item] — reason'. Nothing is actually rolled.",
     cbTest, -2, 480)
 
-local cbGreedUnusable = makeCheckbox(scrollChild, "greedUnusable",
-    "Greed items the class cannot equip",
-    "When off, items your class cannot equip (e.g. Mage seeing Plate) are passed instead of greeded.",
-    cbTestDesc, 0, -4)
-
--- ---- Section: Quality & Upgrades ------------------------------------------
-local sec2 = makeSection(scrollChild, "Quality & Upgrades", cbGreedUnusable, -20)
-
--- Quality filter: toggle + slider with quality NAMES
-local cbQualityEnabled = makeCheckbox(scrollChild, "qualityFilterEnabled",
-    "Filter by minimum item quality",
-    "When on, items below the chosen quality are passed. When off, quality is not considered.",
-    sec2, 0, -8)
-cbQualityEnabled.onChange = function(on)
-    if widgets.minQuality and widgets.minQuality.enable then
-        widgets.minQuality.enable(on)
-    end
-end
-
-local sliderQuality = makeSlider(scrollChild, "minQuality",
-    "Minimum quality",
-    0, 4, 1,
-    "Items below this quality are passed. Slider values: 0=Poor, 1=Common, 2=Uncommon, 3=Rare, 4=Epic.",
-    cbQualityEnabled, 16, -28,
-    function(v) return ("Minimum quality: %s (%d)"):format(Data.QualityNames[v] or "?", v) end)
-local qualityDesc = makeDescription(scrollChild,
-    "Items below the selected quality are passed without rolling.",
-    sliderQuality, -8, 480)
+-- ---- Section: Upgrades ----------------------------------------------------
+local sec2 = makeSection(scrollChild, "Upgrades", cbTestDesc, -20)
 
 -- ilvl upgrade: toggle + slider with explanation
 local cbReqILvl = makeCheckbox(scrollChild, "requireILvlUpgrade",
     "Need only on item-level upgrades",
     "When on, Need rolls require the incoming item to have higher ilvl than your equipped item in that slot. When off, Need on any stat-matching item regardless of ilvl.",
-    qualityDesc, -16, -4)
+    sec2, 0, -8)
 cbReqILvl.onChange = function(on)
     if widgets.needILvlMargin and widgets.needILvlMargin.enable then
         widgets.needILvlMargin.enable(on)
@@ -522,9 +496,6 @@ panel.refresh = function()
         end
     end
     -- Apply enable/disable for sliders that depend on toggles.
-    if widgets.minQuality and widgets.minQuality.enable then
-        widgets.minQuality.enable(Config:Get().qualityFilterEnabled)
-    end
     if widgets.needILvlMargin and widgets.needILvlMargin.enable then
         widgets.needILvlMargin.enable(Config:Get().requireILvlUpgrade)
     end

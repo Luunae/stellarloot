@@ -404,6 +404,42 @@ Data.ActionToRollType = {
 
 -- Quality colors for chat output
 Data.QualityNames = {
-    [0] = "Poor", [1] = "Common", [2] = "Uncommon",
-    [3] = "Rare", [4] = "Epic", [5] = "Legendary",
+    [0] = "Poor",   [1] = "Common", [2] = "Uncommon",
+    [3] = "Rare",   [4] = "Epic",   [5] = "Legendary",
+    [7] = "Heirloom",
 }
+
+Data.QUALITY_HEIRLOOM = 7
+
+-- Heirlooms report base ilvl 1 in inventory (so an equipped heirloom would
+-- otherwise lose every ilvl comparison and trigger false Needs). We substitute
+-- a single flat synthetic — calibrating per-heirloom isn't worth the
+-- maintenance overhead given how irregular Blizzard's stat budgets are. Bump
+-- the constant if observation shows it's too high or too low.
+Data.HEIRLOOM_ILVL = 400
+
+function Data.IsHeirloom(link)
+    if not link then return false end
+    local _, _, quality = GetItemInfo(link)
+    return quality == Data.QUALITY_HEIRLOOM
+end
+
+-- Resolve an item link's effective ilvl, preferring the upgrade-scaled API
+-- value and substituting HEIRLOOM_ILVL for heirlooms. Returns (ilvl, isHeirloom).
+function Data.EffectiveILvl(link)
+    if not link then return 0, false end
+    local isHeirloom = Data.IsHeirloom(link)
+    local ilvl = 0
+    local fn = _G.GetDetailedItemLevelInfo
+    if fn then
+        ilvl = fn(link) or 0
+    end
+    if ilvl == 0 then
+        local _, _, _, baseILvl = GetItemInfo(link)
+        ilvl = baseILvl or 0
+    end
+    if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
+        ilvl = Data.HEIRLOOM_ILVL
+    end
+    return ilvl, isHeirloom
+end

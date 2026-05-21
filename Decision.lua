@@ -13,10 +13,6 @@ local Data = StellarLoot.Data
 local Decision = {}
 StellarLoot.Decision = Decision
 
-local function qualityName(q)
-    return Data.QualityNames[q] or tostring(q)
-end
-
 local function newTrace(itemID, itemLink)
     return {
         itemID = itemID,
@@ -42,15 +38,11 @@ local function decide(trace, action, text, data)
     return action, trace
 end
 
--- Look up an item's effective ilvl, preferring the upgraded value.
+-- Effective ilvl lives in Data.EffectiveILvl (shared with PlayerState so the
+-- equipped-side and incoming-side both apply heirloom synthetic scaling).
 local function effectiveILvl(link)
-    local fn = _G.GetDetailedItemLevelInfo
-    if fn then
-        local ilvl = fn(link)
-        if ilvl and ilvl > 0 then return ilvl end
-    end
-    local _, _, _, baseILvl = GetItemInfo(link)
-    return baseILvl or 0
+    local ilvl = Data.EffectiveILvl(link)
+    return ilvl
 end
 
 local function armorTypeName(subclassID)
@@ -104,21 +96,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         { rule = "ITEM_INFO", classID = classID, subclassID = subclassID,
           equipLoc = equipLoc, baseILvl = baseILvl, quality = quality })
 
-    -- Step 4: quality threshold (skipped if quality filter disabled)
-    if cfg.qualityFilterEnabled then
-        if (quality or 0) < cfg.minQuality then
-            return decide(trace, "PASS",
-                ("quality %s below threshold %s"):format(
-                    qualityName(quality), qualityName(cfg.minQuality)),
-                { rule = "QUALITY_BELOW_MIN", quality = quality, threshold = cfg.minQuality })
-        end
-        note(trace, ("quality %s ≥ threshold %s"):format(
-            qualityName(quality), qualityName(cfg.minQuality)))
-    else
-        note(trace, "quality filter disabled — skipping quality check")
-    end
-
-    -- Step 5: any roll option available?
+    -- Step 4: any roll option available?
     if not rollInfo.canNeed and not rollInfo.canGreed then
         return decide(trace, "PASS",
             "no roll options available (Need and Greed both disallowed)",
@@ -127,7 +105,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     note(trace, ("roll options: Need=%s Greed=%s"):format(
         tostring(rollInfo.canNeed), tostring(rollInfo.canGreed)))
 
-    -- Step 6: can the class equip this at all?
+    -- Step 5: can the class equip this at all?
     local isArmor  = (classID == Data.ITEM_CLASS_ARMOR)
     local isWeapon = (classID == Data.ITEM_CLASS_WEAPON)
     local classToken = ctx.classToken
@@ -135,8 +113,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     if isArmor then
         local proficient = Data.ClassArmor[classToken] and Data.ClassArmor[classToken][subclassID]
         if not proficient then
-            local action = (cfg.greedUnusable and rollInfo.canGreed) and "GREED" or "PASS"
-            return decide(trace, action,
+            return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
                 ("class %s cannot equip %s armor"):format(classToken, armorTypeName(subclassID)),
                 { rule = "ARMOR_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -145,8 +122,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     elseif isWeapon then
         local proficient = Data.ClassWeapons[classToken] and Data.ClassWeapons[classToken][subclassID]
         if not proficient then
-            local action = (cfg.greedUnusable and rollInfo.canGreed) and "GREED" or "PASS"
-            return decide(trace, action,
+            return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
                 ("class %s cannot equip weapon subclass %s"):format(classToken, tostring(itemSubType)),
                 { rule = "WEAPON_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -154,7 +130,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         note(trace, ("class %s can equip %s"):format(classToken, tostring(itemSubType)))
     end
 
-    -- Step 7: wrong armor type for class (Paladin sees Cloth)
+    -- Step 6: wrong armor type for class (Paladin sees Cloth)
     if isArmor then
         local preferred = Data.ClassPreferredArmor[classToken]
         -- Generic (cloaks) and shields are always equippable; exempt from "preferred".
@@ -170,10 +146,10 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
-    -- Step 8: tier token / class-restricted item.
+    -- Step 7: tier token / class-restricted item.
     -- Token tooltips don't show the redeemed gear's ilvl in-game, so we
     -- surface it in the trace — it's the only way to tell LFR/Normal/Heroic
-    -- variants apart at a glance. tokenEquipLoc, when set, redirects Step 10's
+    -- variants apart at a glance. tokenEquipLoc, when set, redirects Step 9's
     -- ilvl comparison from the token's INVTYPE_NON_EQUIP_IGNORE to the slot
     -- the token redeems for ("WILDCARD" = Essence; compares vs worst tier slot).
     local tokenEquipLoc
@@ -197,7 +173,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
-    -- Step 9: primary stat match — main spec or off-spec
+    -- Step 8: primary stat match — main spec or off-spec
     -- specBranch tracks which spec the item matches: "main" or "off". Tier
     -- tokens and stat-less items short-circuit to "main".
     local specBranch
@@ -258,7 +234,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
-    -- Step 10: ilvl comparison
+    -- Step 9: ilvl comparison
     -- mainSpec branch: compare against currently-equipped (worst slot).
     -- offSpec branch:  compare against the configured equipment-manager set.
     -- Tier tokens reroute to their redeemed slot (or, for Essence wildcards,
@@ -267,51 +243,70 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     local isKnownTierToken = itemID and Data.TierTokens[itemID] ~= nil
     local isWildcardToken = (tokenEquipLoc == "WILDCARD")
     if isEquippable or tokenEquipLoc then
-        local incomingILvl = effectiveILvl(itemLink)
-        local compareILvl, compareLabel
-
-        if isWildcardToken then
-            local worst
-            for _, loc in ipairs(Data.TierWildcardSlots) do
-                local v = ctx.worstEquippedILvl(loc)
-                if v and (not worst or v < worst) then worst = v end
-            end
-            compareILvl = worst or 0
-            compareLabel = "worst tier slot"
-        elseif specBranch == "off" then
-            local setName = cfg.offspec and cfg.offspec.equipmentSet
-            if not setName or setName == "" then
-                return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                    "off-spec match but no equipment set configured — Greed",
-                    { rule = "OFFSPEC_NO_SET" })
-            end
-            compareILvl = ctx.worstSetILvl and ctx.worstSetILvl(equipLoc, setName) or nil
-            if not compareILvl then
-                return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                    ("off-spec set %q has no item in this slot — Greed"):format(setName),
-                    { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
-            end
-            compareLabel = ('set "%s"'):format(setName)
-        else
-            compareILvl = ctx.worstEquippedILvl(tokenEquipLoc or equipLoc)
-            compareLabel = "equipped"
-        end
-
         if not cfg.requireILvlUpgrade then
-            note(trace, ("ilvl check disabled — incoming %d vs %s %d"):format(
-                incomingILvl, compareLabel, compareILvl))
+            -- Stat-only mode: a stat-matching item is a Need outright, with no
+            -- ilvl comparison or equipment-set requirement.
+            note(trace, "ilvl check disabled — stat match is sufficient",
+                { rule = "ILVL_DISABLED" })
             if rollInfo.canNeed then
                 return decide(trace, "NEED",
                     "stat-matching item (ilvl upgrade not required)",
                     { rule = "STAT_MATCH_ANY_ILVL", branch = specBranch })
             end
         else
-            note(trace, ("ilvl: incoming %d vs %s %d (margin %d)"):format(
-                incomingILvl, compareLabel, compareILvl, cfg.needILvlMargin),
-                { rule = "ILVL", incoming = incomingILvl, compare = compareILvl,
-                  branch = specBranch })
+            local incomingILvl = effectiveILvl(itemLink)
+            local compareILvl, compareLabel
+            local compareHeirloom = false
 
-            if rollInfo.canNeed and incomingILvl > compareILvl + cfg.needILvlMargin then
+            if isWildcardToken then
+                local worst, worstHeirloom
+                for _, loc in ipairs(Data.TierWildcardSlots) do
+                    local v, h = ctx.worstEquippedILvl(loc)
+                    if v and (not worst or v < worst) then
+                        worst, worstHeirloom = v, h
+                    end
+                end
+                compareILvl = worst or 0
+                compareHeirloom = worstHeirloom or false
+                compareLabel = "worst tier slot"
+            elseif specBranch == "off" then
+                local setName = cfg.offspec and cfg.offspec.equipmentSet
+                if not setName or setName == "" then
+                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                        "off-spec match but no equipment set configured — Greed",
+                        { rule = "OFFSPEC_NO_SET" })
+                end
+                if ctx.worstSetILvl then
+                    compareILvl, compareHeirloom = ctx.worstSetILvl(equipLoc, setName)
+                end
+                if not compareILvl then
+                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                        ("off-spec set %q has no item in this slot — Greed"):format(setName),
+                        { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
+                end
+                compareLabel = ('set "%s"'):format(setName)
+            else
+                compareILvl, compareHeirloom = ctx.worstEquippedILvl(tokenEquipLoc or equipLoc)
+                compareLabel = "equipped"
+            end
+
+            if compareHeirloom then
+                note(trace, ("comparison slot holds a heirloom — using synthetic ilvl %d"):format(compareILvl),
+                    { rule = "HEIRLOOM_IN_SLOT", compareILvl = compareILvl })
+            end
+
+            local extraMargin = compareHeirloom and (cfg.heirloomNeedMarginExtra or 0) or 0
+            local effectiveMargin = cfg.needILvlMargin + extraMargin
+            local marginDesc = (extraMargin > 0)
+                and ("%d + %d heirloom"):format(cfg.needILvlMargin, extraMargin)
+                or  tostring(cfg.needILvlMargin)
+            note(trace, ("ilvl: incoming %d vs %s %d (margin %s)"):format(
+                incomingILvl, compareLabel, compareILvl, marginDesc),
+                { rule = "ILVL", incoming = incomingILvl, compare = compareILvl,
+                  branch = specBranch, heirloom = compareHeirloom,
+                  margin = effectiveMargin })
+
+            if rollInfo.canNeed and incomingILvl > compareILvl + effectiveMargin then
                 local suffix = (specBranch == "off") and " (off-spec)" or ""
                 return decide(trace, "NEED",
                     ("upgrade: +%d ilvl over %s%s"):format(
@@ -334,7 +329,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             { rule = "NON_EQUIPPABLE", equipLoc = equipLoc })
     end
 
-    -- Step 11: default — Greed or Pass
+    -- Step 10: default — Greed or Pass
     local action = rollInfo.canGreed and "GREED" or "PASS"
     return decide(trace, action,
         (action == "GREED")

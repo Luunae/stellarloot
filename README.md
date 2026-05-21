@@ -10,10 +10,12 @@ Watches for group-loot rolls and decides for you based on your **class**, **curr
 
 Default behavior:
 
-- **Need** items that match your spec's primary stat *and* are an item-level upgrade over what you have equipped in that slot.
-- **Need** items that match your **off-spec**'s primary stat when they upgrade your saved off-spec equipment set (opt-in).
-- **Greed** anything else your class can use — the wrong armor type, the wrong primary stat, items below upgrade threshold, etc.
-- **Pass** on items below the configured quality threshold or that your class literally cannot equip (when "Greed unusable" is off).
+- **Need** items that match your spec's primary stat.
+- **Need** items that match your **off-spec**'s primary stat (opt-in).
+- **Greed** anything else your class can use, including the wrong armor type or wrong primary stat.
+- **Pass** when no Greed roll is offered.
+
+Item-level filtering is **off by default** — ilvl is an unreliable signal of item value across expansions and on irregularly-budgeted items (PvP gear, BoAs, heirlooms). Turn it on in the options panel for stricter endgame behavior; when enabled, Need additionally requires the incoming item to exceed your equipped piece's ilvl by the configured margin, and heirlooms are scored against a single synthetic ilvl (`Data.HEIRLOOM_ILVL = 400`) rather than their API-reported value of 1.
 
 ## Install
 
@@ -42,6 +44,7 @@ Via the CurseForge addon downloader, or manually: drop the contents of this repo
 | `/stellarloot log clear` | Wipe saved history |
 | `/stellarloot override <itemID> <need\|greed\|pass\|clear>` | Force a specific action for an item |
 | `/stellarloot eval <itemLink>` | Print what the addon *would* decide for the linked item right now |
+| `/stellarloot heirloom <itemLink>` | Show heirloom recognition + ilvl resolution (debug aid for cataloging) |
 
 `/sl` is registered as a short alias.
 
@@ -49,7 +52,7 @@ Via the CurseForge addon downloader, or manually: drop the contents of this repo
 
 If you regularly play a second spec (e.g. Holy paladin / Prot off-spec), Stellar Loot can Need items that match its primary stat too.
 
-1. **Save your off-spec gear as an Equipment Manager set** in-game (Character → Equipment Manager). This is the comparison baseline for off-spec ilvl checks — if there's no set, off-spec items fall through to Greed.
+1. **(Only if ilvl filtering is on)** Save your off-spec gear as an Equipment Manager set in-game (Character → Equipment Manager). This is the comparison baseline for off-spec ilvl checks — if there's no set, off-spec items fall through to Greed. With ilvl filtering off (the default), the set is not required.
 2. Open the config panel and pick the off-spec source: **Auto-detect** reads your inactive talent group's primary stat; **Manual** lets you pick (use this if you haven't trained your second spec yet).
 3. Pick that equipment set in the off-spec dropdown.
 
@@ -87,9 +90,9 @@ Settings are **account-wide by default**. The first checkbox on the panel ("Use 
 
 The main panel has:
 
-- **Roll Behavior** — master toggle, test mode, what to do with unusable items.
-- **Quality & Upgrades** — minimum quality threshold (with disable toggle), ilvl margin required for Need rolls (with disable toggle).
-- **Off-Spec Support** — source (off / auto-detect / manual), manual primary-stat picker, and the equipment-set selector.
+- **Roll Behavior** — master toggle and test mode.
+- **Upgrades** — opt-in ilvl-margin requirement for Need rolls (off by default).
+- **Off-Spec Support** — source (off / auto-detect / manual), manual primary-stat picker, and the equipment-set selector (only used when ilvl filtering is on).
 - **Fallback Action** — what to do when item info doesn't load before the roll timer expires (Greed / Pass / Need / Manual).
 - **Per-item overrides** — force specific actions on specific items (also editable via the `override` slash command).
 
