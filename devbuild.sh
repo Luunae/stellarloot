@@ -20,6 +20,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Source local config if present, for persistent settings like the AddOns dir.
+# This file is gitignored — keep secrets/paths out of the repo.
+if [[ -f .devbuild.env ]]; then
+    # shellcheck disable=SC1091
+    source .devbuild.env
+fi
+
 MODE="${1:-build}"
 case "$MODE" in
     build|deploy) ;;
