@@ -23,6 +23,7 @@ local function printHelp()
     Log:Info("  /stellarloot override <id> <need|greed|pass|clear>")
     Log:Info("  /stellarloot eval <itemLink>  print what would be rolled for the linked item")
     Log:Info("  /stellarloot heirloom <link>  show heirloom recognition + effective ilvl")
+    Log:Info("  /stellarloot equipped <slot>  show C_Item-sourced ilvl + cached snapshot for slot")
 end
 
 local function cmdStatus()
@@ -107,6 +108,27 @@ local function cmdHeirloom(args)
     end
 end
 
+local function cmdEquipped(args)
+    local slot = tonumber(args:match("^%s*(%d+)"))
+    if not slot or slot < 1 or slot > 18 then
+        Log:Warn("usage: /stellarloot equipped <slot>  (1-18; head=1 chest=5 legs=7 mh=16 oh=17)")
+        return
+    end
+    local link = GetInventoryItemLink("player", slot)
+    if not link then
+        Log:Info(("slot %d: empty"):format(slot))
+        return
+    end
+    local _, _, _, baseILvl = GetItemInfo(link)
+    local equippedILvl, isHeirloom = Data.EquippedILvl(slot)
+    local cached = PlayerState.equippedILvl[slot] or 0
+    Log:Info(("slot %d: %s"):format(slot, link))
+    Log:Info(("  C_Item ilvl: %d   link base ilvl: %d   heirloom: %s")
+        :format(equippedILvl, baseILvl or 0, tostring(isHeirloom)))
+    Log:Info(("  PlayerState cached: %d   pending: %s")
+        :format(cached, tostring(PlayerState.pendingSlots[slot])))
+end
+
 local function cmdEval(args)
     -- Extract the first valid item link from the rest of the args.
     local link = args:match("(|%x+|Hitem:.-|h.-|h|r)") or args:match("(item:%d[%d:]*)")
@@ -169,6 +191,8 @@ SlashCmdList["STELLARLOOT"] = function(msg)
         cmdEval(rest)
     elseif cmd == "heirloom" then
         cmdHeirloom(rest)
+    elseif cmd == "equipped" then
+        cmdEquipped(rest)
     elseif cmd == "log" then
         cmdLog(rest)
     else

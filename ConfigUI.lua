@@ -523,7 +523,6 @@ panel:HookScript("OnShow", function() panel.refresh() end)
 -- Register with whichever options system this client provides.
 if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
     local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-    category.ID = panel.name
     Settings.RegisterAddOnCategory(category)
     panel.settingsCategory = category
 elseif _G.InterfaceOptions_AddCategory then

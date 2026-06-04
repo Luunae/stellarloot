@@ -402,13 +402,6 @@ Data.ActionToRollType = {
     GREED = Data.ROLL_GREED,
 }
 
--- Quality colors for chat output
-Data.QualityNames = {
-    [0] = "Poor",   [1] = "Common", [2] = "Uncommon",
-    [3] = "Rare",   [4] = "Epic",   [5] = "Legendary",
-    [7] = "Heirloom",
-}
-
 Data.QUALITY_HEIRLOOM = 7
 
 -- Heirlooms report base ilvl 1 in inventory (so an equipped heirloom would
@@ -424,20 +417,45 @@ function Data.IsHeirloom(link)
     return quality == Data.QUALITY_HEIRLOOM
 end
 
--- Resolve an item link's effective ilvl, preferring the upgrade-scaled API
--- value and substituting HEIRLOOM_ILVL for heirlooms. Returns (ilvl, isHeirloom).
+-- Resolve an item link's base ilvl, substituting HEIRLOOM_ILVL for heirlooms.
+-- Returns (ilvl, isHeirloom).
+--
+-- Used for incoming loot links and bag/equipment-set items. Note this returns
+-- BASE ilvl, not upgraded — in MoP Classic 5.5.4, item links never carry the
+-- upgrade encoding (verified 2026-06-03: GetInventoryItemLink on a 2/2 upgraded
+-- piece returns an un-upgraded link, and GetDetailedItemLevelInfo reports the
+-- base ilvl too). For equipped slots, use Data.EquippedILvl(slot) which queries
+-- C_Item directly and reflects upgrades. Incoming drops are always base ilvl
+-- (upgrades happen at a vendor, post-loot), so this is the right answer for
+-- them.
 function Data.EffectiveILvl(link)
     if not link then return 0, false end
     local isHeirloom = Data.IsHeirloom(link)
-    local ilvl = 0
-    local fn = _G.GetDetailedItemLevelInfo
-    if fn then
-        ilvl = fn(link) or 0
+    local _, _, _, baseILvl = GetItemInfo(link)
+    local ilvl = baseILvl or 0
+    if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
+        ilvl = Data.HEIRLOOM_ILVL
     end
-    if ilvl == 0 then
-        local _, _, _, baseILvl = GetItemInfo(link)
-        ilvl = baseILvl or 0
+    return ilvl, isHeirloom
+end
+
+-- Resolve the effective ilvl of the item equipped in `slot`, reflecting MoP
+-- upgrades. Queries C_Item.GetCurrentItemLevel via ItemLocation, which reads
+-- the live item rather than its link — link-based paths (GetItemInfo,
+-- GetDetailedItemLevelInfo) all report the un-upgraded base ilvl on 5.5.4.
+-- Returns (ilvl, isHeirloom). Falls back to link-based EffectiveILvl on
+-- pre-C_Item clients (defensive — 5.5.4 has it).
+function Data.EquippedILvl(slot)
+    if not slot then return 0, false end
+    local link = GetInventoryItemLink("player", slot)
+    if not link then return 0, false end
+    if not (C_Item and ItemLocation) then
+        return Data.EffectiveILvl(link)
     end
+    local loc = ItemLocation:CreateFromEquipmentSlot(slot)
+    if not C_Item.DoesItemExist(loc) then return 0, false end
+    local ilvl = C_Item.GetCurrentItemLevel(loc) or 0
+    local isHeirloom = Data.IsHeirloom(link)
     if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
         ilvl = Data.HEIRLOOM_ILVL
     end

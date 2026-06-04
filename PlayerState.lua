@@ -143,20 +143,13 @@ function PlayerState:RefreshSlot(slot)
     if not slot or slot < 1 then return end
     local link = GetInventoryItemLink("player", slot)
     if link then
-        local ilvl, isHeirloom = Data.EffectiveILvl(link)
+        local ilvl, isHeirloom = Data.EquippedILvl(slot)
         self.equippedILvl[slot] = ilvl
         self.equippedHeirloom[slot] = isHeirloom or nil
         -- A non-empty slot resolving to ilvl 0 means the item isn't in the
-        -- client cache yet — common at PLAYER_LOGIN, especially for upgraded
-        -- items whose ilvl needs the server's upgrade data. Remember the
-        -- itemID so GET_ITEM_INFO_RECEIVED can re-read the slot. Otherwise it
-        -- stays a stale 0 and every same-slot roll looks like a huge upgrade.
-        --
-        -- TODO: this gates "pending" on ilvl == 0 only. If an upgraded item's
-        -- detailed ilvl hasn't resolved yet, Data.EffectiveILvl can return its
-        -- non-zero *base* ilvl instead — which slips past this check, so the
-        -- slot is never re-read and the equipped snapshot stays understated.
-        -- Needs in-client verification with upgraded gear before fixing.
+        -- client cache yet — common at PLAYER_LOGIN. Remember the itemID so
+        -- GET_ITEM_INFO_RECEIVED can re-read the slot. Otherwise it stays a
+        -- stale 0 and every same-slot roll looks like a huge upgrade.
         if ilvl == 0 then
             local pendingID = tonumber(link:match("item:(%d+)"))
             self.pendingSlots[slot] = pendingID
@@ -177,6 +170,18 @@ function PlayerState:RefreshAllSlots()
     -- which never roll). Bag slots (20+) are not gear.
     for slot = 1, 18 do
         self:RefreshSlot(slot)
+    end
+    -- Verbose-only readout of resolved ilvls — visible confirmation that
+    -- upgrade-aware equipped reads landed correctly at load.
+    local parts = {}
+    for slot = 1, 18 do
+        local ilvl = self.equippedILvl[slot] or 0
+        if ilvl > 0 then
+            table.insert(parts, ("%d=%d"):format(slot, ilvl))
+        end
+    end
+    if #parts > 0 then
+        debugLog("equipped ilvl: " .. table.concat(parts, " "))
     end
 end
 

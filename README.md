@@ -45,6 +45,7 @@ Via the CurseForge addon downloader, or manually: drop the contents of this repo
 | `/stellarloot override <itemID> <need\|greed\|pass\|clear>` | Force a specific action for an item |
 | `/stellarloot eval <itemLink>` | Print what the addon *would* decide for the linked item right now |
 | `/stellarloot heirloom <itemLink>` | Show heirloom recognition + ilvl resolution (debug aid for cataloging) |
+| `/stellarloot equipped <slot>` | Show C_Item-sourced ilvl vs link base ilvl vs cached snapshot for an equipped slot (debug aid for upgrade tracking) |
 
 `/sl` is registered as a short alias.
 
@@ -72,7 +73,6 @@ With **verbose** logging enabled, every check that ran is shown:
 StellarLoot GREED [Robe of Glowing Stone]
   · addon enabled
   · item: Robe of Glowing Stone (q4, ilvl 522, Armor/Cloth, equipLoc INVTYPE_CHEST)
-  · quality Epic ≥ threshold Uncommon
   · roll options: Need=true Greed=true
   · class PALADIN can equip Cloth armor
   → wrong armor type: Cloth (class prefers Plate)

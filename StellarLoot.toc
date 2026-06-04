@@ -1,4 +1,4 @@
-## Interface: 50500
+## Interface: 50504
 ## Title: Stellar Loot
 ## Notes: Automatically roll Need/Greed/Pass on group loot based on class, spec, and equipped gear.
 ## Author: Luna
