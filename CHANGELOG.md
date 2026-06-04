@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — `/sl` survives combat
+
+**Fixed: `/sl` errored when used in combat.** Opening the Settings panel touches protected UI and is blocked under combat lockdown, so `/sl` during a fight threw instead of opening the options. The panel now defers opening until combat ends — invoking `/sl` mid-combat logs `settings panel will open when you leave combat` and registers for `PLAYER_REGEN_ENABLED`, then opens normally once the fight is over. A single watcher frame is reused across deferrals.
+
 ## 0.5.0 — Stat-only default, simpler everywhere
 
 **Interface bumped to 50504** for Mists Classic 5.5.4. The settings panel now opens by category ID rather than name — 5.5.4 tightened `Settings.OpenToCategory` to reject non-numeric IDs, so `/sl` (and any other entry into the options panel) errored out on the patched client.

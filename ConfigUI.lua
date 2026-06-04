@@ -529,7 +529,20 @@ elseif _G.InterfaceOptions_AddCategory then
     _G.InterfaceOptions_AddCategory(panel)
 end
 
+local combatWatcher
 function ConfigUI:Open()
+    if InCombatLockdown() then
+        if not combatWatcher then
+            combatWatcher = CreateFrame("Frame")
+            combatWatcher:SetScript("OnEvent", function(frame)
+                frame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+                ConfigUI:Open()
+            end)
+        end
+        combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+        StellarLoot.Log:Info("settings panel will open when you leave combat")
+        return
+    end
     if Settings and Settings.OpenToCategory and panel.settingsCategory then
         Settings.OpenToCategory(panel.settingsCategory:GetID() or panel.settingsCategory.ID)
     elseif _G.InterfaceOptionsFrame_OpenToCategory then
