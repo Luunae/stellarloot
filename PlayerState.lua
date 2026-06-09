@@ -228,20 +228,31 @@ end
 -- the item lives somewhere we can't read from (bank/void storage when away).
 function PlayerState:GetEquipmentSetItemLink(setName, invSlot)
     if not setName or not invSlot then return nil end
-    if not C_EquipmentSet or not _G.EquipmentManager_UnpackLocation then
-        return nil
-    end
+    if not (C_EquipmentSet and ItemLocation and C_Item) then return nil end
     local setID = C_EquipmentSet.GetEquipmentSetID(setName)
     if not setID then return nil end
-    local locations = C_EquipmentSet.GetItemLocations(setID)
-    if not locations then return nil end
-    local loc = locations[invSlot]
-    if not loc or loc == 0 or loc == -1 then return nil end
-    local player, _bank, bags, _void, slot, bag = EquipmentManager_UnpackLocation(loc)
-    if player then
-        return GetInventoryItemLink("player", invSlot)
-    elseif bags and _G.GetContainerItemLink then
-        return GetContainerItemLink(bag, slot)
+    local ids = C_EquipmentSet.GetItemIDs and C_EquipmentSet.GetItemIDs(setID)
+    if not ids then return nil end
+    local wantedID = ids[invSlot]
+    if not wantedID or wantedID == 0 then return nil end
+
+    if GetInventoryItemID and GetInventoryItemID("player", invSlot) == wantedID then
+        local loc = ItemLocation:CreateFromEquipmentSlot(invSlot)
+        if C_Item.DoesItemExist(loc) then return loc end
+    end
+
+    local getNumSlots = (C_Container and C_Container.GetContainerNumSlots) or _G.GetContainerNumSlots
+    local getItemID = (C_Container and C_Container.GetContainerItemID) or _G.GetContainerItemID
+    if not getNumSlots or not getItemID then return nil end
+    local lastBag = NUM_BAG_SLOTS or 4
+    for bag = 0, lastBag do
+        local n = getNumSlots(bag) or 0
+        for s = 1, n do
+            if getItemID(bag, s) == wantedID then
+                local loc = ItemLocation:CreateFromBagAndSlot(bag, s)
+                if C_Item.DoesItemExist(loc) then return loc end
+            end
+        end
     end
     return nil
 end
@@ -249,15 +260,24 @@ end
 -- Worst ilvl across the slots an equipLoc maps to, using items from an
 -- equipment set rather than what's currently equipped. Returns (ilvl,
 -- isHeirloom) — ilvl is nil if the set has no items in any of those slots
--- (caller treats that as "no comparison possible").
+-- (caller treats that as "no comparison possible"). Reads through
+-- C_Item.GetCurrentItemLevel so MoP upgrades are reflected even when the set
+-- item is sitting in a bag (link-based reads would understate it).
 function PlayerState:WorstSetILvl(equipLoc, setName)
     local slots = Data.EquipLocToSlots[equipLoc]
     if not slots or not setName then return nil, false end
+    if not (C_Item and ItemLocation) then return nil, false end
+
     local worst, worstHeirloom
     for _, slot in ipairs(slots) do
-        local link = self:GetEquipmentSetItemLink(setName, slot)
-        if link then
-            local ilvl, isHeirloom = Data.EffectiveILvl(link)
+        local loc = self:GetEquipmentSetItemLocation(setName, slot)
+        if loc then
+            local ilvl = C_Item.GetCurrentItemLevel(loc) or 0
+            local link = C_Item.GetItemLink and C_Item.GetItemLink(loc)
+            local isHeirloom = link and Data.IsHeirloom(link) or false
+            if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
+                ilvl = Data.HEIRLOOM_ILVL
+            end
             if not worst or ilvl < worst then
                 worst = ilvl
                 worstHeirloom = isHeirloom or false

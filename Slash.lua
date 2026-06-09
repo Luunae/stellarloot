@@ -24,6 +24,7 @@ local function printHelp()
     Log:Info("  /stellarloot eval <itemLink>  print what would be rolled for the linked item")
     Log:Info("  /stellarloot heirloom <link>  show heirloom recognition + effective ilvl")
     Log:Info("  /stellarloot equipped <slot>  show C_Item-sourced ilvl + cached snapshot for slot")
+    Log:Info("  /stellarloot readsetilvl <name>  show per-slot itemID + C_Item ilvl for an equipment set")
 end
 
 local function cmdStatus()
@@ -142,6 +143,53 @@ local function cmdEval(args)
     Log:Info("→ would roll: " .. tostring(action))
 end
 
+-- Diagnostic: walk every slot the named equipment set defines and print what
+-- the addon resolves for each one (assigned itemID, where it was located,
+-- C_Item ilvl, link). Useful to verify equipment-set comparisons match what
+-- the user expects without waiting for an actual loot roll.
+local function cmdReadSetILvl(args)
+    local name = args:match("^%s*\"(.+)\"%s*$")
+                or args:match("^%s*'(.+)'%s*$")
+                or args:match("^%s*(.-)%s*$")
+    if not name or name == "" then
+        Log:Warn("usage: /stellarloot readsetilvl <set name>")
+        return
+    end
+    if not (C_EquipmentSet and ItemLocation and C_Item) then
+        Log:Warn("equipment-set APIs unavailable on this client")
+        return
+    end
+    local setID = C_EquipmentSet.GetEquipmentSetID(name)
+    if not setID then
+        Log:Warn(("no equipment set named %q"):format(name))
+        return
+    end
+    local ids = C_EquipmentSet.GetItemIDs and C_EquipmentSet.GetItemIDs(setID)
+    if not ids then
+        Log:Warn(("set %q exists but C_EquipmentSet.GetItemIDs returned nothing"):format(name))
+        return
+    end
+    Log:Info(("set %q (id %d):"):format(name, setID))
+    local any = false
+    for invSlot = 1, 19 do
+        local itemID = ids[invSlot]
+        if itemID and itemID ~= 0 then
+            any = true
+            local loc = PlayerState:GetEquipmentSetItemLocation(name, invSlot)
+            if loc then
+                local ilvl = C_Item.GetCurrentItemLevel(loc) or 0
+                local link = C_Item.GetItemLink and C_Item.GetItemLink(loc) or "?"
+                Log:Info(("  slot %2d  id %d  ilvl %d  %s"):format(invSlot, itemID, ilvl, link))
+            else
+                Log:Info(("  slot %2d  id %d  (not in equipped or bags — bank/void?)"):format(invSlot, itemID))
+            end
+        end
+    end
+    if not any then
+        Log:Info("  (set has no items assigned)")
+    end
+end
+
 local function cmdLog(rest)
     local arg = rest:match("^%s*(%S*)")
     if arg == "clear" then
@@ -193,6 +241,8 @@ SlashCmdList["STELLARLOOT"] = function(msg)
         cmdHeirloom(rest)
     elseif cmd == "equipped" then
         cmdEquipped(rest)
+    elseif cmd == "readsetilvl" then
+        cmdReadSetILvl(rest)
     elseif cmd == "log" then
         cmdLog(rest)
     else

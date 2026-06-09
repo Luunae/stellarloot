@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — Off-spec set comparisons read the right item
+
+**Fixed: off-spec equipment-set comparisons could read the equipped item instead of the set's.** On MoP Classic 5.5.4, `C_EquipmentSet.GetItemLocations` hands back a player-encoded location for a set whose item lives in bags while a different item is currently equipped in that slot. The 0.5.0 code took that location at face value and called `GetInventoryItemLink("player", invSlot)`, which returns whatever's *currently* equipped — the active spec's gear, not the set's. Result: a same-item drop showed up as a massive ilvl upgrade over the off-spec set (e.g. a 502 Crown of Potentiated Birth read as +52 over the Holy set, because the comparison was actually against the 450 Prot helm equipped at the time). Equipment-set resolution now identifies the set's item via `C_EquipmentSet.GetItemIDs` and locates it ourselves (equipped slot first, bag scan otherwise). The ilvl read goes through `C_Item.GetCurrentItemLevel(ItemLocation)`, which also closes the 0.5.0 follow-up about upgrade-aware bag reads — an upgraded set piece sitting in bags is now compared at its upgraded ilvl, not its base.
+
+**`/sl readsetilvl <name>` debug helper** — walks every slot the named equipment set defines and prints the assigned itemID, where the addon located it, the resolved ilvl, and the link. Quote the name if it has spaces. Useful for verifying off-spec set comparisons match what you expect without waiting on a real roll.
+
 ## 0.5.1 — `/sl` survives combat
 
 **Fixed: `/sl` errored when used in combat.** Opening the Settings panel touches protected UI and is blocked under combat lockdown, so `/sl` during a fight threw instead of opening the options. The panel now defers opening until combat ends — invoking `/sl` mid-combat logs `settings panel will open when you leave combat` and registers for `PLAYER_REGEN_ENABLED`, then opens normally once the fight is over. A single watcher frame is reused across deferrals.
