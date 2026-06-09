@@ -282,7 +282,7 @@ local sourceChoices = {
     { label = "Manual",      value = "manual" },
 }
 local ddOffSource = CreateFrame("Frame", "StellarLootOpt_offspecSource", scrollChild, "UIDropDownMenuTemplate")
-ddOffSource:SetPoint("TOPLEFT", offspecDesc, "BOTTOMLEFT", 0, -16)
+ddOffSource:SetPoint("TOPLEFT", offspecDesc, "BOTTOMLEFT", 0, -20)
 local ddOffSourceLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 ddOffSourceLabel:SetPoint("BOTTOMLEFT", ddOffSource, "TOPLEFT", 20, 2)
 ddOffSourceLabel:SetText("Off-spec source")
@@ -406,7 +406,11 @@ widgets.__offspec_set = {
 }
 
 -- ---- Section: Fallback ----------------------------------------------------
-local sec3 = makeSection(scrollChild, "Fallback Action", ddOffSet, -28, -16)
+-- x=0: section labels align with the column origin. Dropdowns' TOPLEFT.x
+-- matches scrollChild's content edge (the ddOff* chain all uses x=0), so a
+-- section anchored to a dropdown's BOTTOMLEFT lands correctly with no x
+-- offset. The original -16 here understated the column position and clipped.
+local sec3 = makeSection(scrollChild, "Fallback Action", ddOffSet, -28, 0)
 local fallbackDesc = makeDescription(scrollChild,
     "What to do when item info doesn't load before the roll timer is about to expire.",
     sec3, -4, 540)
@@ -419,7 +423,7 @@ local ddFallback = makeDropdown(scrollChild, "fallbackAction",
         { label = "Need",                   value = "NEED" },
         { label = "Manual (do nothing)",    value = "MANUAL" },
     },
-    fallbackDesc, 0, -4)
+    fallbackDesc, 0, -20)
 
 -- ---- Section: Per-item Overrides ------------------------------------------
 local sec5 = makeSection(scrollChild, "Per-item Overrides", ddFallback, -36)

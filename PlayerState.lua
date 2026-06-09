@@ -209,9 +209,29 @@ end
 -- Worst-of-comparison ilvl across all slots an equipLoc could fill. Returns
 -- (ilvl, isHeirloom) where isHeirloom reflects the slot that produced the worst
 -- ilvl (i.e. the one we'd be replacing) — used by Decision to pad needILvlMargin.
-function PlayerState:WorstEquippedILvl(equipLoc)
+--
+-- If incomingName is provided and any slot in the family holds an item of that
+-- same name, return THAT slot specifically. This handles Unique-Equipped rings
+-- and trinkets (the common case is two same-family rings at different ilvls;
+-- the game forces you to replace the matching one, not the worst). Matching by
+-- name rather than itemID catches Celestial/Normal/Heroic siblings, which share
+-- names but use different itemIDs.
+function PlayerState:WorstEquippedILvl(equipLoc, incomingName)
     local slots = Data.EquipLocToSlots[equipLoc]
     if not slots then return 0, false end
+
+    if incomingName then
+        for _, slot in ipairs(slots) do
+            local link = GetInventoryItemLink("player", slot)
+            if link then
+                local equippedName = GetItemInfo(link)
+                if equippedName == incomingName then
+                    return self.equippedILvl[slot] or 0, self.equippedHeirloom[slot] or false
+                end
+            end
+        end
+    end
+
     local worst, worstHeirloom
     for _, slot in ipairs(slots) do
         local ilvl = self.equippedILvl[slot] or 0
@@ -223,10 +243,19 @@ function PlayerState:WorstEquippedILvl(equipLoc)
     return worst or 0, worstHeirloom or false
 end
 
--- Resolve the item link the named equipment set assigns to a given inv slot.
--- Returns nil if the set doesn't define that slot, the set name is invalid, or
--- the item lives somewhere we can't read from (bank/void storage when away).
-function PlayerState:GetEquipmentSetItemLink(setName, invSlot)
+-- Locate the item the named equipment set assigns to a given inv slot, as an
+-- ItemLocation suitable for C_Item.GetCurrentItemLevel. Returns nil if the set
+-- doesn't define that slot, the set name is invalid, or the item can't be
+-- found in equipped slots or bags (bank/void storage are out of reach while
+-- away from them).
+--
+-- We deliberately don't trust C_EquipmentSet.GetItemLocations here: on MoP
+-- 5.5.4 it can hand back a player-encoded location for a set whose item lives
+-- in bags, which then resolves to "whatever's currently equipped in that
+-- slot" — a different item entirely, since the set isn't active. Going via
+-- GetItemIDs and locating each itemID ourselves is robust to that quirk and
+-- works the same in all expansions.
+function PlayerState:GetEquipmentSetItemLocation(setName, invSlot)
     if not setName or not invSlot then return nil end
     if not (C_EquipmentSet and ItemLocation and C_Item) then return nil end
     local setID = C_EquipmentSet.GetEquipmentSetID(setName)
@@ -263,21 +292,39 @@ end
 -- (caller treats that as "no comparison possible"). Reads through
 -- C_Item.GetCurrentItemLevel so MoP upgrades are reflected even when the set
 -- item is sitting in a bag (link-based reads would understate it).
-function PlayerState:WorstSetILvl(equipLoc, setName)
+--
+-- Same unique-equipped sibling rule as WorstEquippedILvl: if incomingName is
+-- supplied and the set contains a same-name item, prefer that slot.
+function PlayerState:WorstSetILvl(equipLoc, setName, incomingName)
     local slots = Data.EquipLocToSlots[equipLoc]
     if not slots or not setName then return nil, false end
     if not (C_Item and ItemLocation) then return nil, false end
 
+    local function readSlot(invSlot)
+        local loc = self:GetEquipmentSetItemLocation(setName, invSlot)
+        if not loc then return nil end
+        local ilvl = C_Item.GetCurrentItemLevel(loc) or 0
+        local link = C_Item.GetItemLink and C_Item.GetItemLink(loc)
+        local isHeirloom = link and Data.IsHeirloom(link) or false
+        if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
+            ilvl = Data.HEIRLOOM_ILVL
+        end
+        return ilvl, isHeirloom, link
+    end
+
+    if incomingName then
+        for _, slot in ipairs(slots) do
+            local ilvl, isHeirloom, link = readSlot(slot)
+            if link and GetItemInfo(link) == incomingName then
+                return ilvl, isHeirloom
+            end
+        end
+    end
+
     local worst, worstHeirloom
     for _, slot in ipairs(slots) do
-        local loc = self:GetEquipmentSetItemLocation(setName, slot)
-        if loc then
-            local ilvl = C_Item.GetCurrentItemLevel(loc) or 0
-            local link = C_Item.GetItemLink and C_Item.GetItemLink(loc)
-            local isHeirloom = link and Data.IsHeirloom(link) or false
-            if isHeirloom and Data.HEIRLOOM_ILVL > ilvl then
-                ilvl = Data.HEIRLOOM_ILVL
-            end
+        local ilvl, isHeirloom = readSlot(slot)
+        if ilvl then
             if not worst or ilvl < worst then
                 worst = ilvl
                 worstHeirloom = isHeirloom or false
@@ -317,7 +364,7 @@ function PlayerState:Snapshot()
         offspecSpecName = self.offspecSpecName,
         offspecRole = self.offspecRole,
         offspecPrimaryStat = self.offspecPrimaryStat,
-        worstEquippedILvl = function(equipLoc) return PlayerState:WorstEquippedILvl(equipLoc) end,
-        worstSetILvl = function(equipLoc, setName) return PlayerState:WorstSetILvl(equipLoc, setName) end,
+        worstEquippedILvl = function(equipLoc, incomingName) return PlayerState:WorstEquippedILvl(equipLoc, incomingName) end,
+        worstSetILvl = function(equipLoc, setName, incomingName) return PlayerState:WorstSetILvl(equipLoc, setName, incomingName) end,
     }
 end

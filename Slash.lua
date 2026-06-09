@@ -137,6 +137,11 @@ local function cmdEval(args)
         Log:Warn("usage: /stellarloot eval <item link>  (shift-click an item into chat)")
         return
     end
+    -- MoP Classic item links don't encode upgrade tier (verified 2026-06-05);
+    -- linked items always evaluate at base ilvl. The equipped-side comparison
+    -- *does* reflect upgrades via C_Item, so the asymmetry can make an
+    -- already-upgraded item linked from inventory look like a downgrade.
+    Log:Info("note: linked items show base ilvl; equipped items reflect upgrades.")
     local action, trace = Events.EvaluateLink(link, nil)
     -- Force verbose for eval so the user always sees the full chain.
     Log:Verbose(trace, { testMode = false })

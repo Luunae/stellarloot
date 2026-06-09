@@ -45,6 +45,14 @@ local function effectiveILvl(link)
     return ilvl
 end
 
+-- Resolve a "GREED | PASS" knob to a concrete action. Honors the user's
+-- preference; if they prefer GREED but the loot system disallows it, falls
+-- back to PASS rather than failing the RollOnLoot call.
+local function resolveAction(preferred, canGreed)
+    if preferred == "PASS" then return "PASS" end
+    return canGreed and "GREED" or "PASS"
+end
+
 local function armorTypeName(subclassID)
     local names = {
         [Data.ARMOR_GENERIC] = "Misc",
@@ -113,7 +121,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     if isArmor then
         local proficient = Data.ClassArmor[classToken] and Data.ClassArmor[classToken][subclassID]
         if not proficient then
-            return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
                 ("class %s cannot equip %s armor"):format(classToken, armorTypeName(subclassID)),
                 { rule = "ARMOR_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -122,7 +130,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     elseif isWeapon then
         local proficient = Data.ClassWeapons[classToken] and Data.ClassWeapons[classToken][subclassID]
         if not proficient then
-            return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
                 ("class %s cannot equip weapon subclass %s"):format(classToken, tostring(itemSubType)),
                 { rule = "WEAPON_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -136,7 +144,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         -- Generic (cloaks) and shields are always equippable; exempt from "preferred".
         local isFlexible = (subclassID == Data.ARMOR_GENERIC or subclassID == Data.ARMOR_SHIELD)
         if preferred and not isFlexible and subclassID ~= preferred then
-            return decide(trace, "GREED",
+            return decide(trace, resolveAction(cfg.wrongArmorTypeAction, rollInfo.canGreed),
                 ("wrong armor type: %s (class prefers %s)"):format(
                     armorTypeName(subclassID), armorTypeName(preferred)),
                 { rule = "WRONG_ARMOR_TYPE", got = subclassID, want = preferred })
@@ -166,7 +174,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                 { rule = "TIER_TOKEN_MATCH", ilvl = tokenILvl, equipLoc = tokenEquipLoc })
             -- Skip stat check; jump to ilvl comparison below.
         else
-            return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
                 ("tier token (ilvl %d) not for %s"):format(tokenILvl, classToken),
                 { rule = "TIER_TOKEN_MISMATCH", ilvl = tokenILvl,
                   classToken = classToken, allowed = allowed })
@@ -225,7 +233,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                     end
                 end
                 if not specBranch then
-                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
+                    return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
                         ("missing primary stat %s"):format(statName),
                         { rule = "WRONG_PRIMARY_STAT", want = statName,
                           stats = stats })
@@ -272,21 +280,25 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             elseif specBranch == "off" then
                 local setName = cfg.offspec and cfg.offspec.equipmentSet
                 if not setName or setName == "" then
-                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                        "off-spec match but no equipment set configured — Greed",
+                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                        "off-spec match but no equipment set configured",
                         { rule = "OFFSPEC_NO_SET" })
                 end
                 if ctx.worstSetILvl then
-                    compareILvl, compareHeirloom = ctx.worstSetILvl(equipLoc, setName)
+                    compareILvl, compareHeirloom = ctx.worstSetILvl(equipLoc, setName, name)
                 end
                 if not compareILvl then
-                    return decide(trace, rollInfo.canGreed and "GREED" or "PASS",
-                        ("off-spec set %q has no item in this slot — Greed"):format(setName),
+                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                        ("off-spec set %q has no item in this slot"):format(setName),
                         { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
                 end
                 compareLabel = ('set "%s"'):format(setName)
             else
-                compareILvl, compareHeirloom = ctx.worstEquippedILvl(tokenEquipLoc or equipLoc)
+                -- Tier tokens redeem to gear with different names than the token
+                -- itself, so unique-equipped sibling matching doesn't apply when
+                -- tokenEquipLoc is set — pass nil for incomingName in that case.
+                local matchName = tokenEquipLoc and nil or name
+                compareILvl, compareHeirloom = ctx.worstEquippedILvl(tokenEquipLoc or equipLoc, matchName)
                 compareLabel = "equipped"
             end
 
@@ -330,11 +342,16 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     end
 
     -- Step 10: default — Greed or Pass
-    local action = rollInfo.canGreed and "GREED" or "PASS"
-    return decide(trace, action,
-        (action == "GREED")
-            and "no upgrade and no disqualifier — default Greed"
-            or  "no Greed available — default Pass",
+    local action = resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed)
+    local reason
+    if action == "GREED" then
+        reason = "no upgrade and no disqualifier — default Greed"
+    elseif cfg.nonUpgradeAction == "PASS" then
+        reason = "no upgrade — passing per config"
+    else
+        reason = "no upgrade and no Greed available — default Pass"
+    end
+    return decide(trace, action, reason,
         { rule = "DEFAULT", action = action })
 end
 

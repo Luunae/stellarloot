@@ -22,7 +22,13 @@ Config.DEFAULTS = {
     requireILvlUpgrade = false,
     needILvlMargin = 0,               -- ilvls beyond equipped required for Need
     heirloomNeedMarginExtra = 0,      -- extra margin when the slot we'd replace holds a heirloom (XP-bonus stickiness)
-    fallbackAction = "GREED",         -- GREED | PASS | NEED | MANUAL
+    fallbackAction = "GREED",         -- GREED | PASS | NEED | MANUAL — when item info never loads
+    -- "What to do when…" knobs for the three classes of non-upgrade outcome.
+    -- Defaults match the pre-existing hard-coded behavior (GREED if available,
+    -- PASS otherwise). Set to "PASS" to leave items for the disenchanter.
+    unusableAction       = "GREED",   -- GREED | PASS — class can't equip / wrong primary stat / tier token not for class
+    wrongArmorTypeAction = "GREED",   -- GREED | PASS — class can equip but prefers a heavier armor type
+    nonUpgradeAction     = "GREED",   -- GREED | PASS — item is usable but not an upgrade (incl. unconfigured off-spec)
     overrides = {},                   -- [itemID] = "NEED" | "GREED" | "PASS"
     classOverrides = {
         primaryStat = nil,
