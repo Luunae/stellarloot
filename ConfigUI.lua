@@ -29,13 +29,6 @@ local widgets = {}
 
 -- ---- Widget helpers --------------------------------------------------------
 
-local function makeTitle(parent, text, anchorTo, x, y)
-    local title = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", anchorTo or parent, anchorTo and "BOTTOMLEFT" or "TOPLEFT", x or 0, y or -8)
-    title:SetText(text)
-    return title
-end
-
 local function makeSection(parent, text, anchorTo, y, x)
     local h = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     h:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", x or 0, y or -16)
@@ -151,15 +144,6 @@ local function makeDropdown(parent, key, label, choices, anchorTo, x, y)
             end
         end }
     return dd
-end
-
-local function makeButton(parent, label, anchorTo, x, y, onClick)
-    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    btn:SetSize(160, 22)
-    btn:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", x or 0, y or -8)
-    btn:SetText(label)
-    btn:SetScript("OnClick", onClick)
-    return btn
 end
 
 -- ---- Panel layout ----------------------------------------------------------
@@ -491,8 +475,10 @@ panel.refresh = function()
         if w.type == "checkbox" then
             w.widget:SetChecked(w.get() and true or false)
         elseif w.type == "slider" then
-            w.widget:SetValue(w.get() or 0)
-            -- Trigger formatter via OnValueChanged (already done by SetValue)
+            -- Use the widget entry's set(): SetValue alone doesn't fire
+            -- OnValueChanged when the value is unchanged, leaving the label
+            -- without its formatted text on first open.
+            w.set(w.get() or 0)
         elseif w.type == "dropdown" then
             w.set(w.get())
         elseif w.type == "edit" then

@@ -18,7 +18,6 @@ f:SetScript("OnEvent", function(_, event, arg1)
         PlayerState:RefreshClass()
         PlayerState:RefreshSpec()
         PlayerState:RefreshOffSpec()
-        PlayerState:RefreshProfessions()
         PlayerState:RefreshAllSlots()
         Log:Info(("loaded — %s. /stellarloot for help."):format(
             PlayerState.specName and ("playing " .. PlayerState.specName) or "spec pending"))

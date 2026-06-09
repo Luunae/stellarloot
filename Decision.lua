@@ -53,16 +53,17 @@ local function resolveAction(preferred, canGreed)
     return canGreed and "GREED" or "PASS"
 end
 
+local ARMOR_TYPE_NAMES = {
+    [Data.ARMOR_GENERIC] = "Misc",
+    [Data.ARMOR_CLOTH]   = "Cloth",
+    [Data.ARMOR_LEATHER] = "Leather",
+    [Data.ARMOR_MAIL]    = "Mail",
+    [Data.ARMOR_PLATE]   = "Plate",
+    [Data.ARMOR_SHIELD]  = "Shield",
+}
+
 local function armorTypeName(subclassID)
-    local names = {
-        [Data.ARMOR_GENERIC] = "Misc",
-        [Data.ARMOR_CLOTH]   = "Cloth",
-        [Data.ARMOR_LEATHER] = "Leather",
-        [Data.ARMOR_MAIL]    = "Mail",
-        [Data.ARMOR_PLATE]   = "Plate",
-        [Data.ARMOR_SHIELD]  = "Shield",
-    }
-    return names[subclassID] or ("subclass " .. tostring(subclassID))
+    return ARMOR_TYPE_NAMES[subclassID] or ("subclass " .. tostring(subclassID))
 end
 
 -- The big one. Ordered checks; first match wins.
@@ -74,21 +75,22 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     local itemID = tonumber(itemLink and itemLink:match("item:(%d+)"))
     trace.itemID = itemID
 
-    -- Step 1: per-item override
-    if itemID and cfg.overrides and cfg.overrides[itemID] then
-        local action = cfg.overrides[itemID]
-        return decide(trace, action,
-            ("user override → %s"):format(action),
-            { rule = "USER_OVERRIDE", itemID = itemID, action = action })
-    end
-
-    -- Step 2: master toggle
+    -- Step 1: master toggle. Checked before everything else — including
+    -- per-item overrides — so disabling the addon stops ALL auto-rolling.
     if not cfg.enabled then
         return decide(trace, nil,
             "addon disabled — leaving roll for manual click",
             { rule = "DISABLED" })
     end
     note(trace, "addon enabled")
+
+    -- Step 2: per-item override
+    if itemID and cfg.overrides and cfg.overrides[itemID] then
+        local action = cfg.overrides[itemID]
+        return decide(trace, action,
+            ("user override → %s"):format(action),
+            { rule = "USER_OVERRIDE", itemID = itemID, action = action })
+    end
 
     -- Step 3: item info loaded?
     local name, link, quality, baseILvl, _, itemType, itemSubType,

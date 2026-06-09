@@ -9,7 +9,10 @@ local Config      = StellarLoot.Config
 local Log         = StellarLoot.Log
 
 local Events = {
-    pendingRolls = {},     -- [rollID] = { itemLink = , scheduledAt = , safetyTimer = }
+    pendingRolls = {},     -- [rollID] = { action = , itemLink = }; action "DEFER" means
+                           -- evaluated but awaiting item info — anything else is final.
+                           -- CANCEL_LOOT_ROLL removes the entry entirely, so a nil entry
+                           -- after a defer means the roll is gone, not undecided.
     pendingByItemID = {},  -- [itemID] = { [rollID] = true } awaiting GET_ITEM_INFO_RECEIVED
     confirmableRolls = {}, -- [rollID] = true for rolls the addon submitted; gates auto-confirm of the BoP popup
 }
@@ -49,6 +52,11 @@ local function evaluateAndAct(rollID)
     local action, trace = Decision.Evaluate(itemLink, rollInfo, ctx)
 
     if action == "DEFER" then
+        -- Record the defer (so the log shows the dropped-signal case, not just
+        -- its absence) and mark the roll as awaiting info. Re-evaluation
+        -- overwrites the marker with the real decision.
+        Events.pendingRolls[rollID] = { action = "DEFER", itemLink = itemLink }
+        Log:Render(trace, cfg)
         -- Queue this rollID against the itemID; re-evaluate when info arrives.
         local itemID = trace.itemID
         if itemID then
@@ -56,20 +64,41 @@ local function evaluateAndAct(rollID)
             Events.pendingByItemID[itemID][rollID] = true
         end
         -- Also set a safety timer so we don't sit on the roll forever.
+        -- canNeed/canGreed are captured here so the fallback can't submit a
+        -- roll type the dialog never offered.
         local timeLeftMs = GetLootRollTimeLeft(rollID) or 0
         local safetyAt = math.max(0.5, (timeLeftMs - 1500) / 1000)
         C_Timer.After(safetyAt, function()
-            if not Events.pendingRolls[rollID] then
-                local fallback = cfg.fallbackAction or "GREED"
-                if fallback == "MANUAL" then
-                    Log:Warn(("item info never loaded for rollID %d — leaving for manual click"):format(rollID))
-                    Events.pendingRolls[rollID] = { action = "MANUAL", itemLink = itemLink }
-                else
-                    Log:Warn(("item info never loaded for rollID %d — falling back to %s"):format(
-                        rollID, fallback))
-                    Events.pendingRolls[rollID] = { action = fallback, itemLink = itemLink }
-                    submitRoll(rollID, fallback)
-                end
+            local pending = Events.pendingRolls[rollID]
+            -- nil → roll canceled/expired (CANCEL_LOOT_ROLL cleaned up);
+            -- non-DEFER → a re-evaluation already decided. Either way, done.
+            if not pending or pending.action ~= "DEFER" then return end
+
+            local configured = cfg.fallbackAction or "GREED"
+            local fallback = configured
+            if fallback == "NEED" and not canNeed then fallback = "GREED" end
+            if fallback == "GREED" and not canGreed then fallback = "PASS" end
+
+            local reason = "item info never loaded before roll timeout"
+            if fallback == "MANUAL" then
+                reason = reason .. " — leaving for manual click"
+            elseif fallback ~= configured then
+                reason = reason .. (" — configured %s not offered, falling back to %s")
+                    :format(configured, fallback)
+            else
+                reason = reason .. (" — falling back to %s"):format(fallback)
+            end
+
+            Events.pendingRolls[rollID] = { action = fallback, itemLink = itemLink }
+            Log:Render({
+                itemID = itemID,
+                itemLink = itemLink,
+                action = fallback,
+                reason = reason,
+                factors = { { text = reason, decisive = true } },
+            }, cfg)
+            if fallback ~= "MANUAL" then
+                submitRoll(rollID, fallback)
             end
         end)
         return
@@ -125,7 +154,8 @@ local function onItemInfoReceived(itemID, success)
         return
     end
     for rollID in pairs(waiting) do
-        if not Events.pendingRolls[rollID] then
+        local pending = Events.pendingRolls[rollID]
+        if not pending or pending.action == "DEFER" then
             evaluateAndAct(rollID)
         end
     end
@@ -140,7 +170,6 @@ frame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 frame:RegisterEvent("PLAYER_TALENT_UPDATE")
 frame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-frame:RegisterEvent("SKILL_LINES_CHANGED")
 
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     if event == "START_LOOT_ROLL" then
@@ -167,8 +196,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
         end
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         PlayerState:RefreshSlot(arg1)
-    elseif event == "SKILL_LINES_CHANGED" then
-        PlayerState:RefreshProfessions()
     end
 end)
 

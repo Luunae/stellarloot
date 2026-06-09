@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**Fixed: per-item overrides no longer bypass the master toggle.** The override check ran before the enabled check, so an overridden item still auto-rolled while the addon was disabled — contradicting the toggle's documented role as the panic button that stops everything. The master toggle is now the first check in the decision chain.
+
+**Fixed: the deferred-roll safety timer can now tell "undecided" from "canceled".** Deferred rolls write a `DEFER` marker into the pending-roll table instead of leaving it empty. Previously a roll that was canceled (or won/expired) before the timer fired looked identical to one still awaiting item info, so the timer submitted a fallback roll against a dead rollID and left orphaned bookkeeping entries behind.
+
+**Fixed: the fallback action respects the roll options actually offered.** With `fallbackAction = "NEED"`, the timeout fallback submitted a Need roll even when the dialog never offered Need. The fallback now degrades NEED → GREED → PASS based on the options captured when the roll first appeared, and the log line says when (and why) it degraded.
+
+**DEFER decisions now reach the log.** Deferred evaluations and their eventual timeout fallbacks are rendered and saved to the decision history like any other outcome. Previously a defer was invisible unless it timed out, and even then only as a transient chat warning — a dropped signal is much easier to miss than a negative one.
+
+**Removed: vestigial enchanting-skill tracking.** `PlayerState.enchantingSkill`, `RefreshProfessions`, and the `SKILL_LINES_CHANGED` registration were scaffolding for the disenchant support removed in 0.2; nothing has consumed them since.
+
+**UI: the ilvl-margin slider label renders its formatted text on first panel open.** The refresh path relied on `OnValueChanged` to apply the formatter, which doesn't fire when the value is unchanged — with the default margin of 0 the label stayed bare until the slider was dragged.
+
 ## 0.6.0 — Default-action knobs, unique-equipped ring matching, UI polish
 
 **Added: three default-action SavedVariable keys.** `unusableAction`, `wrongArmorTypeAction`, and `nonUpgradeAction` (each `GREED`|`PASS`, default `GREED`) let callers configure what the decision engine does when an item isn't a Need. Defaults preserve existing behavior — SL stays grabby out of the box. The keys are not surfaced in the options panel; sister addons (e.g. StellarLoot_For_Gargul) overlay their own values for stricter raid behavior by passing a merged config into `Decision.Evaluate`, and advanced users can poke them via SavedVariables. Keeps SL's UI lean while still giving the decision engine the config surface integrations need.

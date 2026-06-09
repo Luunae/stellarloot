@@ -1,6 +1,6 @@
 -- StellarLoot/PlayerState.lua
--- Cached snapshot of player class, spec, primary stat, enchanting skill, and
--- equipped item levels per slot. Refreshed on relevant events.
+-- Cached snapshot of player class, spec, primary stat, and equipped item
+-- levels per slot. Refreshed on relevant events.
 
 local Data = StellarLoot.Data
 
@@ -49,7 +49,6 @@ local PlayerState = {
     primaryStat = nil,     -- 1=Str, 2=Agi, 4=Int
     role = nil,            -- "TANK", "HEALER", "DAMAGER"
     isHealer = false,
-    enchantingSkill = 0,
     equippedILvl = {},        -- [invSlot] = ilvl number (heirloom synthetic applied)
     equippedHeirloom = {},    -- [invSlot] = true if the equipped item is a heirloom
     pendingSlots = {},        -- [invSlot] = itemID for slots whose ilvl read 0 (item not cached yet)
@@ -122,21 +121,6 @@ function PlayerState:RefreshOffSpec()
     self.offspecSpecName = name
     self.offspecRole = role
     self.offspecPrimaryStat = primaryStat or offspec.primaryStat
-end
-
-function PlayerState:RefreshProfessions()
-    -- Identify Enchanting by skillLine ID 333 (locale-independent), not by name.
-    self.enchantingSkill = 0
-    if not GetProfessions then return end
-    local prof1, prof2 = GetProfessions()
-    for _, slot in ipairs({ prof1, prof2 }) do
-        if slot then
-            local _name, _icon, rank, _maxRank, _numSpells, _spellOffset, skillLine = GetProfessionInfo(slot)
-            if skillLine == 333 then
-                self.enchantingSkill = rank or 0
-            end
-        end
-    end
 end
 
 function PlayerState:RefreshSlot(slot)
@@ -358,7 +342,6 @@ function PlayerState:Snapshot()
         primaryStat = self.primaryStat,
         role = self.role,
         isHealer = self.isHealer,
-        enchantingSkill = self.enchantingSkill,
         equippedILvl = self.equippedILvl,
         offspecSpecID = self.offspecSpecID,
         offspecSpecName = self.offspecSpecName,
