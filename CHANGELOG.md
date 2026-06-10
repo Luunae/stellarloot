@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 — Audit fixes: toggle precedence, defer-path hardening, DEFER logging
 
 **Fixed: per-item overrides no longer bypass the master toggle.** The override check ran before the enabled check, so an overridden item still auto-rolled while the addon was disabled — contradicting the toggle's documented role as the panic button that stops everything. The master toggle is now the first check in the decision chain.
 
