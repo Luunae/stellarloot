@@ -189,7 +189,38 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     local specBranch
     local needsStatCheck = isArmor or isWeapon
     local skipStatCheck = (itemID and Data.TierTokens[itemID])  -- tier tokens already passed
-    if not needsStatCheck or skipStatCheck then
+
+    -- Trinkets consult Data.TrinketSpecs before the stat sniff. MoP itemizes
+    -- most raid trinkets around procs and effects rather than a primary stat
+    -- (114 of the 150 trinket itemIDs in the EJ corpus carry no STR/AGI/INT),
+    -- so the sniff below misreads them as "wrong primary stat". The table is
+    -- Blizzard's own item→spec mapping, lifted from the Encounter Journal
+    -- loot filter, with forged variants joined in by ID scan.
+    if equipLoc == "INVTYPE_TRINKET" and itemID and Data.TrinketSpecs then
+        local specSet = Data.TrinketSpecs[itemID]
+        if specSet then
+            if ctx.specID and specSet[ctx.specID] then
+                specBranch = "main"
+                note(trace, "trinket itemized for this spec (journal mapping)",
+                    { rule = "TRINKET_SPEC_MATCH", specID = ctx.specID })
+            elseif ctx.offspecSpecID and specSet[ctx.offspecSpecID] then
+                specBranch = "off"
+                note(trace, "trinket itemized for off-spec (journal mapping)",
+                    { rule = "TRINKET_OFFSPEC_MATCH", specID = ctx.offspecSpecID })
+            else
+                return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                    "trinket not itemized for this spec or off-spec",
+                    { rule = "TRINKET_SPEC_MISMATCH", specID = ctx.specID,
+                      offspecSpecID = ctx.offspecSpecID })
+            end
+        end
+        -- No table entry: fall through to the stat sniff. A stat-less unknown
+        -- trinket is routed to MANUAL there rather than misread as wrong-stat.
+    end
+
+    if specBranch then
+        -- decided by the trinket mapping above; proceed to the ilvl check
+    elseif not needsStatCheck or skipStatCheck then
         specBranch = "main"
     else
         local statOverride = cfg.classOverrides and cfg.classOverrides.primaryStat
@@ -235,6 +266,24 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                     end
                 end
                 if not specBranch then
+                    -- A trinket with NO primary stat at all (as opposed to a
+                    -- foreign one) and no TrinketSpecs entry is unjudgeable —
+                    -- its value lives in Use:/Equip: effects we cannot read.
+                    -- Leave it for a human rather than silently mis-rolling.
+                    if equipLoc == "INVTYPE_TRINKET" then
+                        local hasAnyPrimary = false
+                        for _, key in pairs(Data.PrimaryStatKey) do
+                            if (stats[key] or 0) > 0 then
+                                hasAnyPrimary = true
+                                break
+                            end
+                        end
+                        if not hasAnyPrimary then
+                            return decide(trace, "MANUAL",
+                                "trinket with no primary stat and no spec mapping — leaving for a manual decision",
+                                { rule = "TRINKET_UNKNOWN", stats = stats })
+                        end
+                    end
                     return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
                         ("missing primary stat %s"):format(statName),
                         { rule = "WRONG_PRIMARY_STAT", want = statName,
