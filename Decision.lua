@@ -143,8 +143,12 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     -- Step 6: wrong armor type for class (Paladin sees Cloth)
     if isArmor then
         local preferred = Data.ClassPreferredArmor[classToken]
-        -- Generic (cloaks) and shields are always equippable; exempt from "preferred".
-        local isFlexible = (subclassID == Data.ARMOR_GENERIC or subclassID == Data.ARMOR_SHIELD)
+        -- Generic (rings/necks/trinkets), shields, and cloaks are exempt from
+        -- "preferred". Cloaks report subclass Cloth in MoP Classic, so they
+        -- must be exempted by equipLoc, not subclass.
+        local isFlexible = (subclassID == Data.ARMOR_GENERIC
+                         or subclassID == Data.ARMOR_SHIELD
+                         or equipLoc == "INVTYPE_CLOAK")
         if preferred and not isFlexible and subclassID ~= preferred then
             return decide(trace, resolveAction(cfg.wrongArmorTypeAction, rollInfo.canGreed),
                 ("wrong armor type: %s (class prefers %s)"):format(

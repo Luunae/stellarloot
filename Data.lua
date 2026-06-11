@@ -12,7 +12,7 @@ Data.ITEM_CLASS_WEAPON = 2
 Data.ITEM_CLASS_ARMOR  = 4
 
 -- Armor subclass IDs (Enum.ItemArmorSubclass.*)
-Data.ARMOR_GENERIC = 0  -- cloaks live here
+Data.ARMOR_GENERIC = 0  -- rings/necks/trinkets; cloaks are CLOTH in MoP Classic
 Data.ARMOR_CLOTH   = 1
 Data.ARMOR_LEATHER = 2
 Data.ARMOR_MAIL    = 3

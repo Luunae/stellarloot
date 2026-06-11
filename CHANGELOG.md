@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 — Cloaks exempt from the wrong-armor-type rule
+
+**Fixed: cloaks no longer trip `WRONG_ARMOR_TYPE` for non-cloth wearers.** Step 6's flexibility exemption keyed on `ARMOR_GENERIC`, which covers rings/necks/trinkets — but cloaks report subclass Cloth in MoP Classic, so every cloak read as off-type armor for anyone whose preferred type isn't cloth, and a mainstat-matching cloak upgrade was greeded instead of needed. The exemption now also matches `equipLoc == "INVTYPE_CLOAK"`. (Cloth-subclass cloaks don't break the all-preferred-armor bonus in-game, so the proficiency and preference logic elsewhere is unaffected.)
+
 ## 0.7.0 — Trinket spec mapping: effect trinkets judged correctly
 
 **Added: `Data.TrinketSpecs` — itemID→specID mapping for every MoP raid trinket.** Most MoP raid trinkets — 114 of the 150 itemIDs the Encounter Journal lists — carry no primary stat; their value lives in Equip:/Use: effects invisible to `GetItemStats`. The step-8 stat sniff misread all of them as "wrong primary stat," so the engine greeded (or passed, under stricter overlay configs) on items like Prismatic Prison of Pride for the very healers it was itemized for. The new generated file (`TrinketSpecs.lua`, 250 entries) carries Blizzard's own item→spec mapping, lifted from the EJ loot filter — which is spec-granular on MoP Classic 5.5.4 (build 68077), verified empirically — and extended with Warforged/Thunderforged variants, which use separate itemIDs the journal never lists, via an itemID-range scan joined by base name. Regeneration tooling and dump provenance live in the `ej-gear-audit` sibling repo.
