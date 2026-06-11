@@ -11,7 +11,10 @@
 #                             World of Warcraft/_classic_/Interface/AddOns"
 #
 # Output is the working tree (not just HEAD), so uncommitted edits are included.
-# Version string in the .toc is set from `git describe --tags --always --dirty`.
+# Version string in the .toc is set from `git describe --tags --always --dirty
+# --long`. The --long matters: without it, a clean tree sitting exactly on a tag
+# describes as the bare tag (e.g. "v0.7.0"), which the in-game version display
+# treats as a tagged release and shows without the "(dev)" marker.
 #
 # File list is read from StellarLoot.toc — the addon's own load manifest. A new
 # .lua file must be added to the .toc to be loaded by WoW, so the build can't
@@ -40,7 +43,7 @@ fi
 
 TOC="StellarLoot.toc"
 OUT="build/StellarLoot"
-VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')"
+VERSION="$(git describe --tags --always --dirty --long 2>/dev/null || echo 'dev')"
 
 # Extract file references from the .toc: any non-empty, non-directive line.
 # Strips trailing CR (in case of CRLF line endings) and leading/trailing whitespace.
