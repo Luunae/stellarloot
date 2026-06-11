@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+**Added: a test suite for the decision engine** (`tests/`, dev-only — excluded from builds). Two layers: ~35 curated cases pinning the full shipped-bug history (toggle precedence, extraStats key forms, trinket mapping, the 0.7.1 cloak fix) asserting both the action and the decisive rule, plus an exhaustive corpus sweep — all 34 class-specs × all 2,931 Encounter Journal items × two equipped-ilvl regimes (~200k evaluations, ~3s), using Blizzard's own EJ loot-filter mapping as the oracle. Fixtures are generated from the ej-gear-audit 5.5.4 dump (build 68077) and committed, so the suite runs standalone: `./tests/run.sh`. Mutation-validated: reverting the 0.7.1 cloak fix lights up 772 sweep violations. The first full sweep of the current engine found zero divergences from the EJ filter.
+
 ## 0.7.1 — Cloaks exempt from the wrong-armor-type rule
 
 **Fixed: cloaks no longer trip `WRONG_ARMOR_TYPE` for non-cloth wearers.** Step 6's flexibility exemption keyed on `ARMOR_GENERIC`, which covers rings/necks/trinkets — but cloaks report subclass Cloth in MoP Classic, so every cloak read as off-type armor for anyone whose preferred type isn't cloth, and a mainstat-matching cloak upgrade was greeded instead of needed. The exemption now also matches `equipLoc == "INVTYPE_CLOAK"`. (Cloth-subclass cloaks don't break the all-preferred-armor bonus in-game, so the proficiency and preference logic elsewhere is unaffected.)

@@ -102,6 +102,10 @@ The **Log** sub-panel (nested under Stellar Loot in the Settings tree) shows the
 
 Releases are auto-packaged to CurseForge by CF's native packager on annotated tag push (`vX.Y.Z`). Lightweight tags are silently ignored.
 
+## Running tests
+
+`./tests/run.sh` (needs Nix; runs under Lua 5.1, the client's dialect). The suite unit-tests the decision engine against fixtures generated from real 5.5.4 item data, then sweeps every class-spec × every Encounter Journal item against Blizzard's own loot-filter mapping as an oracle — ~200k evaluations in a few seconds. See `tests/README.md`.
+
 ## Contributing
 
 If something looks wrong, feel free to let me know via comment, issue, or PR, even for things like typos.
