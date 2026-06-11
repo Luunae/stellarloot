@@ -236,11 +236,17 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             local hasSpirit = (stats["ITEM_MOD_SPIRIT_SHORT"] or 0) > 0
 
             -- Extra accepted stats from config (e.g. healer Spirit treated
-            -- as a primary-equivalent for some specs).
+            -- as a primary-equivalent for some specs). 5.5.4's GetItemStats
+            -- keys are a mixed scheme (base stats _SHORT, ratings unsuffixed
+            -- except mastery — see the EJGearAudit census, 2026-06-11), so no
+            -- single suffix form covers all stats: accept an exact ITEM_MOD_*
+            -- key, or a fragment tried in both forms.
             local extraOK = false
             if cfg.classOverrides and cfg.classOverrides.extraStats then
                 for _, key in ipairs(cfg.classOverrides.extraStats) do
-                    if (stats["ITEM_MOD_" .. key .. "_SHORT"] or 0) > 0 then
+                    if (key:find("^ITEM_MOD_") and (stats[key] or 0) > 0)
+                        or (stats["ITEM_MOD_" .. key .. "_SHORT"] or 0) > 0
+                        or (stats["ITEM_MOD_" .. key] or 0) > 0 then
                         extraOK = true
                         break
                     end
