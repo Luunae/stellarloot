@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 — Trinket spec mapping: effect trinkets judged correctly
+
+**Added: `Data.TrinketSpecs` — itemID→specID mapping for every MoP raid trinket.** Most MoP raid trinkets — 114 of the 150 itemIDs the Encounter Journal lists — carry no primary stat; their value lives in Equip:/Use: effects invisible to `GetItemStats`. The step-8 stat sniff misread all of them as "wrong primary stat," so the engine greeded (or passed, under stricter overlay configs) on items like Prismatic Prison of Pride for the very healers it was itemized for. The new generated file (`TrinketSpecs.lua`, 250 entries) carries Blizzard's own item→spec mapping, lifted from the EJ loot filter — which is spec-granular on MoP Classic 5.5.4 (build 68077), verified empirically — and extended with Warforged/Thunderforged variants, which use separate itemIDs the journal never lists, via an itemID-range scan joined by base name. Regeneration tooling and dump provenance live in the `ej-gear-audit` sibling repo.
+
+**Changed: trinkets consult the mapping before the stat sniff.** Player spec in the item's set → main-spec branch (the normal ilvl comparison still decides Need); off-spec in the set → off-spec branch; in the table but matching neither → `nonUpgradeAction`. Trinkets with true primary stats (Skeer's Bloodsoaked Talisman, Dysmorphic Samophlange of Discontinuity) and all non-trinket items take the unchanged path.
+
+**Added: MANUAL outcome for unjudgeable trinkets.** A trinket with no primary stat of any kind *and* no mapping entry — Timeless Isle effect trinkets, or a future tier's unmapped drops — now returns MANUAL: the engine declines to judge and leaves the roll to the player, instead of silently mis-rolling on a "wrong primary stat" read. Failure mode is loud, by design: an unexpected MANUAL means a gear source the mapping never covered.
+
+**Fixed: `extraStats` config keys can now match rating stats.** The same corpus census settled 5.5.4's `GetItemStats` key scheme as mixed — base stats use `_SHORT` (`ITEM_MOD_SPIRIT_SHORT`), ratings are unsuffixed (`ITEM_MOD_HIT_RATING`) except mastery (`ITEM_MOD_MASTERY_RATING_SHORT`). The extraStats matcher hardcoded the `_SHORT` form, so a configured rating fragment could never match. It now accepts an exact `ITEM_MOD_*` key, or tries a fragment in both forms. (Dormant in practice — no known config populates extraStats — but wrong mechanisms don't get to ship knowingly.)
+
+**Verified: difficulty and forged siblings share exact base names.** The 0.6.0 unique-equipped name-matching leaned on a "gut plus one boss checked" assumption; the corpus confirms it across every MoP raid, difficulty, and forged variant — 101 forged name-joins validated cleanly against journal base entries.
+
 ## 0.6.1 — Audit fixes: toggle precedence, defer-path hardening, DEFER logging
 
 **Fixed: per-item overrides no longer bypass the master toggle.** The override check ran before the enabled check, so an overridden item still auto-rolled while the addon was disabled — contradicting the toggle's documented role as the panic button that stops everything. The master toggle is now the first check in the decision chain.
