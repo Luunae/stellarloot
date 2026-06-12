@@ -69,11 +69,13 @@ Data.ClassPreferredArmor = {
 }
 
 -- Class → set of weapon subclass IDs equippable.
+-- All 11 classes verified 2026-06-11 against the MoP Classic "Weapon Skills"
+-- passives (wowhead.com/mop-classic/spell=<id>): Warrior 76290, Paladin 76294,
+-- DK 76292, Hunter 76249, Shaman 76296, Rogue 76297, Druid 76300, Monk 106902,
+-- Mage 76298, Priest 76301, Warlock 76299. Note MoP removed ranged weapons
+-- from warriors and rogues (5.0.4 dropped the ranged slot; bows/guns/crossbows
+-- are hunter-only, thrown left the game).
 Data.ClassWeapons = {
-    -- MoP removed ranged weapons from warriors and rogues (5.0.4 dropped the
-    -- ranged slot; bows/guns/crossbows are hunter-only, thrown left the game).
-    -- Warrior list verified in-game 2026-06-11 against the "Weapon Skills"
-    -- passive: Axes, Daggers, Fist Weapons, Maces, Polearms, Staves, Swords.
     WARRIOR = {
         [Data.WEAPON_AXE_1H]=true, [Data.WEAPON_AXE_2H]=true, [Data.WEAPON_MACE_1H]=true,
         [Data.WEAPON_MACE_2H]=true, [Data.WEAPON_SWORD_1H]=true, [Data.WEAPON_SWORD_2H]=true,
@@ -101,8 +103,6 @@ Data.ClassWeapons = {
         [Data.WEAPON_MACE_2H]=true, [Data.WEAPON_STAFF]=true, [Data.WEAPON_FIST]=true,
         [Data.WEAPON_DAGGER]=true,
     },
-    -- Rogue ranged removal inferred from the same 5.0.4 change (not yet
-    -- verified against the in-game passive, unlike the warrior list).
     ROGUE = {
         [Data.WEAPON_AXE_1H]=true, [Data.WEAPON_MACE_1H]=true, [Data.WEAPON_SWORD_1H]=true,
         [Data.WEAPON_FIST]=true, [Data.WEAPON_DAGGER]=true,
