@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.2 — QC fixes: ranged proficiency, MANUAL for non-gear; test suite
 
 **Fixed: warriors and rogues no longer count as gun/bow/crossbow users.** MoP 5.0.4 removed the ranged slot; bows, guns, and crossbows are hunter-only and thrown weapons left the game entirely, but `Data.ClassWeapons` still carried the vanilla-era proficiencies. A ranged drop for a warrior was judged at the stat sniff ("missing primary stat") instead of the proficiency gate — same Greed either way, but the wrong mechanism. Warrior list verified in-game against the Weapon Skills passive; the rogue removal is inferred from the same patch change. Found by a manual QC review pass — the corpus sweep's oracle is structurally blind to this shape, since the EJ never lists ranged weapons for non-hunters.
 
