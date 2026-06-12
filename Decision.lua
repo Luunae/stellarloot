@@ -2,9 +2,10 @@
 -- Pure decision logic. No side effects. Directly testable from /run.
 --
 -- Decision.Evaluate(itemLink, rollInfo, ctx) → action, trace
---   action: "PASS" | "GREED" | "NEED" | "DEFER" | nil
+--   action: "PASS" | "GREED" | "NEED" | "DEFER" | "MANUAL" | nil
 --           nil = don't roll (master toggle off)
 --           DEFER = item info not loaded yet; caller should retry later
+--           MANUAL = engine declines to judge; leave the dialog for the player
 --   trace: { itemID, itemLink, factors = {...}, action, decisive, reason }
 --          Every check appended a factor. The decisive factor is the rule
 --          that determined the action.
@@ -397,9 +398,18 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         return decide(trace, "NEED",
             ("tier token (ilvl %d) redeemable by class — slot unknown, defaulting to Need"):format(tokenILvl),
             { rule = "TIER_TOKEN_NEED_FALLBACK", ilvl = tokenILvl })
-    else
-        note(trace, "non-equippable item — skipping ilvl check",
+    elseif isKnownTierToken then
+        -- Token for this class but Need isn't offered — fall through to the
+        -- default rather than MANUAL; greeding a tokenless roll is fine.
+        note(trace, "tier token but Need not offered — falling through",
             { rule = "NON_EQUIPPABLE", equipLoc = equipLoc })
+    else
+        -- Mounts, pets, gold caches, recipes: not gear, so SL has no basis to
+        -- judge. Auto-greeding a coveted mount on the player's behalf is a
+        -- decision they'd rightly resent — leave the dialog up.
+        return decide(trace, "MANUAL",
+            "not equippable gear — leaving for a manual decision",
+            { rule = "NOT_GEAR", equipLoc = equipLoc })
     end
 
     -- Step 10: default — Greed or Pass

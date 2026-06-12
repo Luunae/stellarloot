@@ -32,7 +32,7 @@ Data.WEAPON_SWORD_2H   = 8
 Data.WEAPON_STAFF      = 10
 Data.WEAPON_FIST       = 13
 Data.WEAPON_DAGGER     = 15
-Data.WEAPON_THROWN     = 16
+-- (subclass 16, Thrown, left the game in 5.0.4 — no proficiency lists it)
 Data.WEAPON_CROSSBOW   = 18
 Data.WEAPON_WAND        = 19
 
@@ -70,12 +70,15 @@ Data.ClassPreferredArmor = {
 
 -- Class → set of weapon subclass IDs equippable.
 Data.ClassWeapons = {
+    -- MoP removed ranged weapons from warriors and rogues (5.0.4 dropped the
+    -- ranged slot; bows/guns/crossbows are hunter-only, thrown left the game).
+    -- Warrior list verified in-game 2026-06-11 against the "Weapon Skills"
+    -- passive: Axes, Daggers, Fist Weapons, Maces, Polearms, Staves, Swords.
     WARRIOR = {
         [Data.WEAPON_AXE_1H]=true, [Data.WEAPON_AXE_2H]=true, [Data.WEAPON_MACE_1H]=true,
         [Data.WEAPON_MACE_2H]=true, [Data.WEAPON_SWORD_1H]=true, [Data.WEAPON_SWORD_2H]=true,
         [Data.WEAPON_POLEARM]=true, [Data.WEAPON_STAFF]=true, [Data.WEAPON_FIST]=true,
-        [Data.WEAPON_DAGGER]=true, [Data.WEAPON_BOW]=true, [Data.WEAPON_CROSSBOW]=true,
-        [Data.WEAPON_GUN]=true, [Data.WEAPON_THROWN]=true,
+        [Data.WEAPON_DAGGER]=true,
     },
     PALADIN = {
         [Data.WEAPON_AXE_1H]=true, [Data.WEAPON_AXE_2H]=true, [Data.WEAPON_MACE_1H]=true,
@@ -98,10 +101,11 @@ Data.ClassWeapons = {
         [Data.WEAPON_MACE_2H]=true, [Data.WEAPON_STAFF]=true, [Data.WEAPON_FIST]=true,
         [Data.WEAPON_DAGGER]=true,
     },
+    -- Rogue ranged removal inferred from the same 5.0.4 change (not yet
+    -- verified against the in-game passive, unlike the warrior list).
     ROGUE = {
         [Data.WEAPON_AXE_1H]=true, [Data.WEAPON_MACE_1H]=true, [Data.WEAPON_SWORD_1H]=true,
-        [Data.WEAPON_FIST]=true, [Data.WEAPON_DAGGER]=true, [Data.WEAPON_THROWN]=true,
-        [Data.WEAPON_BOW]=true, [Data.WEAPON_CROSSBOW]=true, [Data.WEAPON_GUN]=true,
+        [Data.WEAPON_FIST]=true, [Data.WEAPON_DAGGER]=true,
     },
     DRUID = {
         [Data.WEAPON_MACE_1H]=true, [Data.WEAPON_MACE_2H]=true, [Data.WEAPON_POLEARM]=true,
@@ -179,7 +183,6 @@ Data.EquipLocToSlots = {
     INVTYPE_SHIELD          = { 17 },
     INVTYPE_RANGED          = { 16 }, -- MoP folded most ranged into MH
     INVTYPE_RANGEDRIGHT     = { 16 },
-    INVTYPE_THROWN          = { 16 },
 }
 
 -- Tier-token name prefix → equipLoc the token redeems for. Lets the decision

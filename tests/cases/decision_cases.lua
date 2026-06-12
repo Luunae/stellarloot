@@ -111,6 +111,22 @@ return {
       item = 104454,
       expect = { action = "GREED", rule = "WEAPON_NOT_PROFICIENT" } },
 
+    { name = "weapon not proficient: warrior sees gun (MoP removed ranged; QC pass 2026-06-11)",
+      item = 86331, ctx = { spec = 73 },
+      expect = { action = "GREED", rule = "WEAPON_NOT_PROFICIENT" } },
+
+    { name = "weapon not proficient: rogue sees gun (MoP removed ranged)",
+      item = 86331, ctx = { spec = 260 },
+      expect = { action = "GREED", rule = "WEAPON_NOT_PROFICIENT" } },
+
+    { name = "mount is not gear → MANUAL (QC pass 2026-06-11)",
+      item = 87771,
+      expect = { action = "MANUAL", rule = "NOT_GEAR" } },
+
+    { name = "battle pet is not gear → MANUAL",
+      item = 104158,
+      expect = { action = "MANUAL", rule = "NOT_GEAR" } },
+
     { name = "wrong armor type: paladin sees cloth robe",
       item = 94731,
       expect = { action = "GREED", rule = "WRONG_ARMOR_TYPE" } },
