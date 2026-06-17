@@ -29,6 +29,8 @@ Config.DEFAULTS = {
     unusableAction       = "GREED",   -- GREED | PASS — class can't equip / wrong primary stat / tier token not for class
     wrongArmorTypeAction = "GREED",   -- GREED | PASS — class can equip but prefers a heavier armor type
     nonUpgradeAction     = "GREED",   -- GREED | PASS — item is usable but not an upgrade (incl. unconfigured off-spec)
+    nonGearAction        = "MANUAL",  -- MANUAL | GREED | PASS — not equippable gear (mounts, pets, gold caches, recipes). MANUAL leaves the dialog up; the engine declines to judge.
+    unjudgeableTrinketAction = "GREED", -- MANUAL | GREED | PASS — trinket whose value is effect-only (no readable primary stat, no spec mapping). Default GREED keeps SL grabby in dungeons; MANUAL leaves the dialog up for the careful player.
     overrides = {},                   -- [itemID] = "NEED" | "GREED" | "PASS"
     classOverrides = {
         primaryStat = nil,

@@ -49,9 +49,20 @@ end
 -- Resolve a "GREED | PASS" knob to a concrete action. Honors the user's
 -- preference; if they prefer GREED but the loot system disallows it, falls
 -- back to PASS rather than failing the RollOnLoot call.
-local function resolveAction(preferred, canGreed)
-    if preferred == "PASS" then return "PASS" end
-    return canGreed and "GREED" or "PASS"
+local function resolveAction(preferred, rollInfo)
+    -- "MANUAL" declines to roll unconditionally — leave Blizzard's dialog up.
+    if preferred == "MANUAL" then return "MANUAL" end
+    -- "NEED" honors a player's per-category choice, but only when the game
+    -- actually offers Need on this roll — we never invent a Need the client
+    -- disallows. When it can't Need, the choice degrades to the grabby
+    -- fallback (Greed if available, else Pass), same as any other category.
+    if preferred == "NEED" then
+        if rollInfo.canNeed then return "NEED" end
+        return rollInfo.canGreed and "GREED" or "PASS"
+    elseif preferred == "PASS" then
+        return "PASS"
+    end
+    return rollInfo.canGreed and "GREED" or "PASS"
 end
 
 local ARMOR_TYPE_NAMES = {
@@ -124,7 +135,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     if isArmor then
         local proficient = Data.ClassArmor[classToken] and Data.ClassArmor[classToken][subclassID]
         if not proficient then
-            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo),
                 ("class %s cannot equip %s armor"):format(classToken, armorTypeName(subclassID)),
                 { rule = "ARMOR_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -133,7 +144,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
     elseif isWeapon then
         local proficient = Data.ClassWeapons[classToken] and Data.ClassWeapons[classToken][subclassID]
         if not proficient then
-            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo),
                 ("class %s cannot equip weapon subclass %s"):format(classToken, tostring(itemSubType)),
                 { rule = "WEAPON_NOT_PROFICIENT", classToken = classToken,
                   subclassID = subclassID })
@@ -151,7 +162,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                          or subclassID == Data.ARMOR_SHIELD
                          or equipLoc == "INVTYPE_CLOAK")
         if preferred and not isFlexible and subclassID ~= preferred then
-            return decide(trace, resolveAction(cfg.wrongArmorTypeAction, rollInfo.canGreed),
+            return decide(trace, resolveAction(cfg.wrongArmorTypeAction, rollInfo),
                 ("wrong armor type: %s (class prefers %s)"):format(
                     armorTypeName(subclassID), armorTypeName(preferred)),
                 { rule = "WRONG_ARMOR_TYPE", got = subclassID, want = preferred })
@@ -181,7 +192,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                 { rule = "TIER_TOKEN_MATCH", ilvl = tokenILvl, equipLoc = tokenEquipLoc })
             -- Skip stat check; jump to ilvl comparison below.
         else
-            return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
+            return decide(trace, resolveAction(cfg.unusableAction, rollInfo),
                 ("tier token (ilvl %d) not for %s"):format(tokenILvl, classToken),
                 { rule = "TIER_TOKEN_MISMATCH", ilvl = tokenILvl,
                   classToken = classToken, allowed = allowed })
@@ -213,14 +224,15 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                 note(trace, "trinket itemized for off-spec (journal mapping)",
                     { rule = "TRINKET_OFFSPEC_MATCH", specID = ctx.offspecSpecID })
             else
-                return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo),
                     "trinket not itemized for this spec or off-spec",
                     { rule = "TRINKET_SPEC_MISMATCH", specID = ctx.specID,
                       offspecSpecID = ctx.offspecSpecID })
             end
         end
-        -- No table entry: fall through to the stat sniff. A stat-less unknown
-        -- trinket is routed to MANUAL there rather than misread as wrong-stat.
+        -- No table entry: fall through to the stat sniff, which classifies the
+        -- trinket by its readable stats (foreign Spirit → greed; effect-only →
+        -- unjudgeableTrinketAction, default greed; MANUAL only in careful mode).
     end
 
     if specBranch then
@@ -277,11 +289,17 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                     end
                 end
                 if not specBranch then
-                    -- A trinket with NO primary stat at all (as opposed to a
-                    -- foreign one) and no TrinketSpecs entry is unjudgeable —
-                    -- its value lives in Use:/Equip: effects we cannot read.
-                    -- Leave it for a human rather than silently mis-rolling.
-                    if equipLoc == "INVTYPE_TRINKET" then
+                    -- A trinket with no readable primary stat AND no Spirit has
+                    -- its entire value in Use:/Equip: effects the API won't
+                    -- surface — genuinely unjudgeable. Spirit is excluded on
+                    -- purpose: it's recognizably a healer's stat, so a Spirit
+                    -- trinket on a non-healer is foreign (not opaque) and greeds
+                    -- via the unusable path below — even in careful mode, so the
+                    -- player isn't nagged by an item that's plainly not theirs.
+                    -- Default GREED keeps SL grabby in dungeons (precision is
+                    -- SLFG's job); set unjudgeableTrinketAction = "MANUAL" to
+                    -- have the engine leave the dialog up instead.
+                    if equipLoc == "INVTYPE_TRINKET" and not hasSpirit then
                         local hasAnyPrimary = false
                         for _, key in pairs(Data.PrimaryStatKey) do
                             if (stats[key] or 0) > 0 then
@@ -290,12 +308,20 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                             end
                         end
                         if not hasAnyPrimary then
+                            local act = cfg.unjudgeableTrinketAction
+                            if act == "GREED" or act == "PASS" or act == "NEED" then
+                                return decide(trace, resolveAction(act, rollInfo),
+                                    "trinket value is effect-only and unreadable — resolved per config",
+                                    { rule = "TRINKET_UNKNOWN", stats = stats })
+                            end
+                            -- MANUAL (the default) or any unrecognized value:
+                            -- decline to roll, leave the dialog up.
                             return decide(trace, "MANUAL",
-                                "trinket with no primary stat and no spec mapping — leaving for a manual decision",
+                                "trinket value is effect-only and unreadable — leaving for a manual decision",
                                 { rule = "TRINKET_UNKNOWN", stats = stats })
                         end
                     end
-                    return decide(trace, resolveAction(cfg.unusableAction, rollInfo.canGreed),
+                    return decide(trace, resolveAction(cfg.unusableAction, rollInfo),
                         ("missing primary stat %s"):format(statName),
                         { rule = "WRONG_PRIMARY_STAT", want = statName,
                           stats = stats })
@@ -342,7 +368,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             elseif specBranch == "off" then
                 local setName = cfg.offspec and cfg.offspec.equipmentSet
                 if not setName or setName == "" then
-                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo),
                         "off-spec match but no equipment set configured",
                         { rule = "OFFSPEC_NO_SET" })
                 end
@@ -350,7 +376,7 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                     compareILvl, compareHeirloom = ctx.worstSetILvl(equipLoc, setName, name)
                 end
                 if not compareILvl then
-                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed),
+                    return decide(trace, resolveAction(cfg.nonUpgradeAction, rollInfo),
                         ("off-spec set %q has no item in this slot"):format(setName),
                         { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
                 end
@@ -405,17 +431,28 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
             { rule = "NON_EQUIPPABLE", equipLoc = equipLoc })
     else
         -- Mounts, pets, gold caches, recipes: not gear, so SL has no basis to
-        -- judge. Auto-greeding a coveted mount on the player's behalf is a
-        -- decision they'd rightly resent — leave the dialog up.
+        -- judge. Default (MANUAL) leaves the dialog up — auto-greeding a coveted
+        -- mount on the player's behalf is a decision they'd rightly resent.
+        -- nonGearAction lets players who'd rather sweep non-gear opt into
+        -- GREED/PASS instead.
+        if cfg.nonGearAction == "GREED" or cfg.nonGearAction == "PASS"
+            or cfg.nonGearAction == "NEED" then
+            return decide(trace, resolveAction(cfg.nonGearAction, rollInfo),
+                "not equippable gear — non-gear action per config",
+                { rule = "NOT_GEAR", equipLoc = equipLoc })
+        end
+        -- MANUAL (the default) or any unrecognized value: leave the dialog up.
         return decide(trace, "MANUAL",
             "not equippable gear — leaving for a manual decision",
             { rule = "NOT_GEAR", equipLoc = equipLoc })
     end
 
     -- Step 10: default — Greed or Pass
-    local action = resolveAction(cfg.nonUpgradeAction, rollInfo.canGreed)
+    local action = resolveAction(cfg.nonUpgradeAction, rollInfo)
     local reason
-    if action == "GREED" then
+    if action == "NEED" then
+        reason = "not an ilvl upgrade, but Need chosen for this category"
+    elseif action == "GREED" then
         reason = "no upgrade and no disqualifier — default Greed"
     elseif cfg.nonUpgradeAction == "PASS" then
         reason = "no upgrade — passing per config"

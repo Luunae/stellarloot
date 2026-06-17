@@ -55,6 +55,24 @@ cbVerbose:SetScript("OnClick", function(self)
     LogUI:Refresh()
 end)
 
+-- History cap: how many decisions the circular buffer retains.
+local sliderCap = CreateFrame("Slider", "StellarLootLog_sliderCap", panel, "OptionsSliderTemplate")
+sliderCap:SetPoint("TOPLEFT", cbVerbose, "BOTTOMLEFT", 4, -20)
+sliderCap:SetWidth(280)
+sliderCap:SetMinMaxValues(50, 1000)
+sliderCap:SetValueStep(50)
+sliderCap:SetObeyStepOnDrag(true)
+_G[sliderCap:GetName() .. "Low"]:SetText("50")
+_G[sliderCap:GetName() .. "High"]:SetText("1000")
+sliderCap.tooltipText = "History size"
+sliderCap.tooltipRequirement = "How many past decisions to keep. Older entries drop off once the cap is reached."
+local function capLabel(v) return ("History size: %d entries"):format(v) end
+sliderCap:SetScript("OnValueChanged", function(self, value)
+    value = math.floor(value / 50 + 0.5) * 50
+    Config:Get().log.maxEntries = value
+    _G[self:GetName() .. "Text"]:SetText(capLabel(value))
+end)
+
 local btnClear = CreateFrame("Button", "StellarLootLog_btnClear", panel, "UIPanelButtonTemplate")
 btnClear:SetSize(120, 22)
 btnClear:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -16)
@@ -75,7 +93,7 @@ StaticPopupDialogs["STELLARLOOT_CONFIRM_CLEAR_LOG"] = {
 -- ---- Scrolling history ----------------------------------------------------
 
 local scroll = CreateFrame("ScrollFrame", "StellarLootLog_Scroll", panel, "UIPanelScrollFrameTemplate")
-scroll:SetPoint("TOPLEFT", cbVerbose, "BOTTOMLEFT", 0, -12)
+scroll:SetPoint("TOPLEFT", sliderCap, "BOTTOMLEFT", -4, -20)
 scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 16)
 
 local content = CreateFrame("Frame", "StellarLootLog_Content", scroll)
@@ -133,6 +151,9 @@ function LogUI:Refresh()
     local cfg = Config:Get()
     cbEnabled:SetChecked(cfg.log and cfg.log.enabled and true or false)
     cbVerbose:SetChecked(cfg.log and cfg.log.verbose and true or false)
+    local cap = (cfg.log and cfg.log.maxEntries) or 200
+    sliderCap:SetValue(cap)
+    _G[sliderCap:GetName() .. "Text"]:SetText(capLabel(cap))
 
     local entries = Log:GetEntries()
     local total = #entries

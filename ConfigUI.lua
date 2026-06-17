@@ -23,6 +23,16 @@ local scrollChild = CreateFrame("Frame", "StellarLootOptionsScrollChild", scroll
 scrollChild:SetSize(560, 1) -- height set after layout
 scroll:SetScrollChild(scrollChild)
 
+-- Mouse-wheel step. The stock UIPanelScrollFrameTemplate handler jumps ~half
+-- the viewport per wheel tick — fine when the panel was barely taller than one
+-- screen, jarring now it's several screens of settings. Step a third of that
+-- (≈1/6 of the viewport). SetValue clamps to the scrollbar's range for us.
+scroll:SetScript("OnMouseWheel", function(self, delta)
+    local bar = self.ScrollBar or _G[self:GetName() .. "ScrollBar"]
+    if not bar then return end
+    bar:SetValue(bar:GetValue() - delta * (self:GetHeight() / 6))
+end)
+
 -- Track widgets so panel.refresh can re-sync values from the saved DB.
 -- Each entry: { type, widget, get, set, [enable(on)] }.
 local widgets = {}
@@ -224,27 +234,79 @@ local sec2 = makeSection(scrollChild, "Upgrades", cbTestDesc, -20)
 
 -- ilvl upgrade: toggle + slider with explanation
 local cbReqILvl = makeCheckbox(scrollChild, "requireILvlUpgrade",
-    "Need only on item-level upgrades",
-    "When on, Need rolls require the incoming item to have higher ilvl than your equipped item in that slot. When off, Need on any stat-matching item regardless of ilvl.",
+    "Auto-Need item-level upgrades",
+    "Controls only the automatic stat-match Need. The Disposition section below decides everything that isn't an automatic Need — and any of its categories can itself be set to Need.",
     sec2, 0, -8)
 cbReqILvl.onChange = function(on)
     if widgets.needILvlMargin and widgets.needILvlMargin.enable then
         widgets.needILvlMargin.enable(on)
     end
+    if widgets.heirloomNeedMarginExtra and widgets.heirloomNeedMarginExtra.enable then
+        widgets.heirloomNeedMarginExtra.enable(on)
+    end
 end
+
+local reqILvlDesc = makeDescription(scrollChild,
+    "|cff80ff80ON:|r an upgrade means a higher item level than you have equipped (subject to the margins below). " ..
+    "|cff80ff80OFF:|r any item matching your spec's primary stat counts, item level aside. " ..
+    "Either way, non-upgrades flow to |cffffd200Disposition|r below — which can itself be set to Need.",
+    cbReqILvl, -2, 500)
 
 local sliderMargin = makeSlider(scrollChild, "needILvlMargin",
     "Required ilvl margin",
     0, 20, 1,
     "Need only if the incoming item is at least this many ilvls higher than equipped. 0 means any upgrade.",
-    cbReqILvl, 16, -28,
+    reqILvlDesc, 16, -28,
     function(v)
         if v == 0 then return "Required ilvl margin: 0 (any upgrade is enough)" end
         return ("Required ilvl margin: %d (incoming must be %d+ ilvl higher)"):format(v, v)
     end)
 
+local sliderHeirloom = makeSlider(scrollChild, "heirloomNeedMarginExtra",
+    "Extra margin vs. heirlooms",
+    0, 20, 1,
+    "When the slot you'd replace holds a heirloom, require this many EXTRA ilvls before Need (added to the margin above). Heirlooms keep their XP bonus, so you may want to hold them longer. Only applies in ilvl-upgrade mode.",
+    sliderMargin, 16, -44,
+    function(v)
+        if v == 0 then return "Extra margin vs. heirlooms: 0 (treat like any slot)" end
+        return ("Extra margin vs. heirlooms: +%d ilvl over the base margin"):format(v)
+    end)
+
+-- ---- Section: Disposition -------------------------------------------------
+-- Per-category fallback roll when an item isn't an automatic Need. Greed (the
+-- default everywhere) keeps StellarLoot grabby in dungeons; Pass leaves the
+-- item for others or the disenchanter; Need claims the whole category where the
+-- game allows it. The two effect/non-gear rows also offer Manual (do nothing).
+local secDisp = makeSection(scrollChild, "Disposition", sliderHeirloom, -28, -16)
+local dispDesc = makeDescription(scrollChild,
+    "What to roll when an item isn't an automatic Need. |cffffd200Greed|r keeps StellarLoot grabby; " ..
+    "|cffffd200Pass|r leaves it for others or the disenchanter; |cffffd200Need|r claims the category; " ..
+    "|cffffd200Manual|r declines and leaves the dialog up.",
+    secDisp, -4, 540)
+
+-- Need is offered everywhere: the dropdown never removes a roll the game
+-- itself allows. When the client doesn't offer Need on a given roll, the
+-- engine degrades the choice to Greed/Pass — see resolveAction.
+local rollChoices = {
+    { label = "Need",                value = "NEED"   },
+    { label = "Greed",               value = "GREED"  },
+    { label = "Pass",                value = "PASS"   },
+    { label = "Manual (do nothing)", value = "MANUAL" },
+}
+
+local ddUnusable = makeDropdown(scrollChild, "unusableAction",
+    "Can't use it (wrong class / primary stat / token)", rollChoices, dispDesc, 0, -24)
+local ddWrongArmor = makeDropdown(scrollChild, "wrongArmorTypeAction",
+    "Wrong armor type (you prefer a heavier type)", rollChoices, ddUnusable, 0, -28)
+local ddNonUpgrade = makeDropdown(scrollChild, "nonUpgradeAction",
+    "Usable but not an upgrade", rollChoices, ddWrongArmor, 0, -28)
+local ddNonGear = makeDropdown(scrollChild, "nonGearAction",
+    "Not gear (mounts, pets, caches, recipes)", rollChoices, ddNonUpgrade, 0, -28)
+local ddUnjudgeable = makeDropdown(scrollChild, "unjudgeableTrinketAction",
+    "Unreadable trinket (value is effect-only)", rollChoices, ddNonGear, 0, -28)
+
 -- ---- Section: Off-Spec ----------------------------------------------------
-local secOff = makeSection(scrollChild, "Off-Spec Support", sliderMargin, -28, -16)
+local secOff = makeSection(scrollChild, "Off-Spec Support", ddUnjudgeable, -36, 0)
 
 local offspecDesc = makeDescription(scrollChild,
     "If you regularly play a second spec, StellarLoot can Need items that match its primary stat. " ..
@@ -466,7 +528,7 @@ widgets["overrides"] = {
 }
 
 -- Compute scrollChild height so the viewport matches content.
-scrollChild:SetHeight(900)
+scrollChild:SetHeight(1320)
 
 -- ---- Panel callbacks -------------------------------------------------------
 
@@ -488,6 +550,9 @@ panel.refresh = function()
     -- Apply enable/disable for sliders that depend on toggles.
     if widgets.needILvlMargin and widgets.needILvlMargin.enable then
         widgets.needILvlMargin.enable(Config:Get().requireILvlUpgrade)
+    end
+    if widgets.heirloomNeedMarginExtra and widgets.heirloomNeedMarginExtra.enable then
+        widgets.heirloomNeedMarginExtra.enable(Config:Get().requireILvlUpgrade)
     end
     refreshOffspecEnable()
 end

@@ -31,6 +31,15 @@ local SYNTH_TRINKET = {
     stats = { ITEM_MOD_STAMINA_SHORT = 100 },
 }
 
+-- Spirit + Stamina, no primary stat: a healer's effect trinket. On a
+-- non-healer it's foreign, not opaque — greeds via the unusable path.
+local SYNTH_SPIRIT_TRINKET = {
+    name = "Empty Fruit Barrel (synthetic)", quality = 4, ilvl = 463,
+    itemType = "Armor", itemSubType = "Miscellaneous",
+    equipLoc = "INVTYPE_TRINKET", classID = 4, subclassID = 0,
+    stats = { ITEM_MOD_SPIRIT_SHORT = 847, ITEM_MOD_STAMINA_SHORT = 100 },
+}
+
 -- 99678 with a name no tier-token slot pattern recognizes.
 local SYNTH_ODD_TOKEN = {
     name = "Mystery of the Cursed Conqueror", quality = 4, ilvl = 528,
@@ -76,9 +85,20 @@ return {
       item = 96523, ctx = { spec = 65 },
       expect = { action = "GREED", rule = "TRINKET_SPEC_MISMATCH" } },
 
-    { name = "stat-less unmapped trinket → MANUAL (0.7.0)",
+    { name = "effect-only trinket → GREED by default (grabby; 0.8.0)",
       item = 900001, synthetic = { [900001] = SYNTH_TRINKET },
+      expect = { action = "GREED", rule = "TRINKET_UNKNOWN" } },
+
+    { name = "effect-only trinket → MANUAL when configured (careful mode)",
+      item = 900001, synthetic = { [900001] = SYNTH_TRINKET },
+      cfg = { unjudgeableTrinketAction = "MANUAL" },
       expect = { action = "MANUAL", rule = "TRINKET_UNKNOWN" } },
+
+    { name = "Spirit trinket on a non-healer is foreign → greed, never MANUAL",
+      item = 900002, synthetic = { [900002] = SYNTH_SPIRIT_TRINKET },
+      ctx = { spec = 66 },  -- Prot Paladin: Str primary, not a healer
+      cfg = { unjudgeableTrinketAction = "MANUAL" },  -- careful mode still must not nag
+      expect = { action = "GREED", rule = "WRONG_PRIMARY_STAT" } },
 
     { name = "extraStats: exact ITEM_MOD_* key matches (0.7.0)",
       item = 94989, cfg = { classOverrides = { extraStats = { "ITEM_MOD_SPIRIT_SHORT" } } },
@@ -127,6 +147,27 @@ return {
       item = 104158,
       expect = { action = "MANUAL", rule = "NOT_GEAR" } },
 
+    { name = "nonGearAction=GREED sweeps a mount to Greed",
+      item = 87771,
+      cfg = { nonGearAction = "GREED" },
+      expect = { action = "GREED", rule = "NOT_GEAR" } },
+
+    { name = "nonGearAction=PASS sweeps a mount to Pass",
+      item = 87771,
+      cfg = { nonGearAction = "PASS" },
+      expect = { action = "PASS", rule = "NOT_GEAR" } },
+
+    { name = "nonGearAction=NEED needs a mount when the game offers Need",
+      item = 87771,
+      cfg = { nonGearAction = "NEED" },
+      expect = { action = "NEED", rule = "NOT_GEAR" } },
+
+    { name = "nonGearAction=NEED degrades to Greed when Need isn't offered",
+      item = 87771,
+      cfg = { nonGearAction = "NEED" },
+      roll = { canNeed = false },
+      expect = { action = "GREED", rule = "NOT_GEAR" } },
+
     { name = "wrong armor type: paladin sees cloth robe",
       item = 94731,
       expect = { action = "GREED", rule = "WRONG_ARMOR_TYPE" } },
@@ -134,6 +175,10 @@ return {
     { name = "wrong armor type respects wrongArmorTypeAction=PASS",
       item = 94731, cfg = { wrongArmorTypeAction = "PASS" },
       expect = { action = "PASS", rule = "WRONG_ARMOR_TYPE" } },
+
+    { name = "wrongArmorTypeAction=MANUAL leaves an off-type item for the player",
+      item = 94731, cfg = { wrongArmorTypeAction = "MANUAL" },
+      expect = { action = "MANUAL", rule = "WRONG_ARMOR_TYPE" } },
 
     { name = "tier token: class match, redeemed slot is an upgrade",
       item = 99678, cfg = { requireILvlUpgrade = true },
@@ -214,4 +259,16 @@ return {
       cfg = { requireILvlUpgrade = true, nonUpgradeAction = "PASS" },
       ctx = { equipped = { INVTYPE_CHEST = 502 } },
       expect = { action = "PASS", rule = "DEFAULT" } },
+
+    { name = "nonUpgradeAction=NEED lets a player Need a usable non-upgrade",
+      item = 87048,
+      cfg = { requireILvlUpgrade = true, nonUpgradeAction = "NEED" },
+      ctx = { equipped = { INVTYPE_CHEST = 502 } },
+      expect = { action = "NEED", rule = "DEFAULT" } },
+
+    { name = "nonUpgradeAction=MANUAL leaves a non-upgrade for the player",
+      item = 87048,
+      cfg = { requireILvlUpgrade = true, nonUpgradeAction = "MANUAL" },
+      ctx = { equipped = { INVTYPE_CHEST = 502 } },
+      expect = { action = "MANUAL", rule = "DEFAULT" } },
 }
