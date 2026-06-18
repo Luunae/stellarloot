@@ -52,6 +52,7 @@ local PlayerState = {
     equippedILvl = {},        -- [invSlot] = ilvl number (heirloom synthetic applied)
     equippedHeirloom = {},    -- [invSlot] = true if the equipped item is a heirloom
     pendingSlots = {},        -- [invSlot] = itemID for slots whose ilvl read 0 (item not cached yet)
+    mainHandTwoHand = nil,    -- true when the equipped main-hand weapon is a 2H
 
     -- Off-spec (populated by RefreshOffSpec; nil when disabled or unavailable)
     offspecSpecID = nil,
@@ -146,6 +147,15 @@ function PlayerState:RefreshSlot(slot)
         self.equippedILvl[slot] = 0
         self.equippedHeirloom[slot] = nil
         self.pendingSlots[slot] = nil
+    end
+
+    -- Track main-hand handedness: a 2H in the main hand leaves the off-hand
+    -- slot empty, which Decision must not mistake for a free off-hand upgrade.
+    -- GetItemInfoInstant resolves equipLoc without the server item cache, so
+    -- this is correct even at login before the item's full info arrives.
+    if slot == 16 then
+        local equipLoc = link and select(4, GetItemInfoInstant(link)) or nil
+        self.mainHandTwoHand = (equipLoc == "INVTYPE_2HWEAPON") or nil
     end
 end
 
@@ -342,6 +352,7 @@ function PlayerState:Snapshot()
         primaryStat = self.primaryStat,
         role = self.role,
         isHealer = self.isHealer,
+        mainHandTwoHand = self.mainHandTwoHand,
         equippedILvl = self.equippedILvl,
         offspecSpecID = self.offspecSpecID,
         offspecSpecName = self.offspecSpecName,

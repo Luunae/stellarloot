@@ -330,6 +330,22 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
         end
     end
 
+    -- Step 8b: weapon hand-coupling. An off-hand-only item (off-hand weapon,
+    -- caster off-hand frill, or shield) cannot be equipped while a two-hander
+    -- occupies the main hand — and no spec wields one without a main-hand 1H.
+    -- Otherwise the empty off-hand slot reads as a free upgrade: in stat-only
+    -- mode the item Needs on a bare primary-stat match (no ilvl compare runs at
+    -- all), and in ilvl mode it beats the empty slot's ilvl 0. We gate only the
+    -- MAIN branch: a shield/off-hand that matched your *off-spec* stat is a
+    -- legitimate "switch specs for it" upgrade and must reach the off-spec
+    -- equipment-set comparison below, which holds the right baseline. Keyed on
+    -- equipLoc, not item class — off-hand frills are armor but couple the same.
+    if specBranch == "main" and ctx.mainHandTwoHand and Data.OffHandOnlyEquipLocs[equipLoc] then
+        return decide(trace, resolveAction(cfg.unusableAction, rollInfo),
+            "off-hand item can't be equipped alongside your two-handed weapon",
+            { rule = "OFFHAND_VS_TWOHAND", equipLoc = equipLoc })
+    end
+
     -- Step 9: ilvl comparison
     -- mainSpec branch: compare against currently-equipped (worst slot).
     -- offSpec branch:  compare against the configured equipment-manager set.
@@ -381,6 +397,25 @@ function Decision.Evaluate(itemLink, rollInfo, ctx)
                         { rule = "OFFSPEC_SET_SLOT_EMPTY", setName = setName })
                 end
                 compareLabel = ('set "%s"'):format(setName)
+            elseif not tokenEquipLoc and equipLoc == "INVTYPE_2HWEAPON" then
+                -- A two-hander displaces BOTH hands, so the binding loss when
+                -- dual-wielding is your *better* weapon, not the worse slot.
+                -- Compare against max(main, off) so a 2H only Needs when it
+                -- beats the best weapon it would replace.
+                local mh, mhH = ctx.worstEquippedILvl("INVTYPE_WEAPONMAINHAND")
+                local oh, ohH = ctx.worstEquippedILvl("INVTYPE_WEAPONOFFHAND")
+                if (oh or 0) > (mh or 0) then
+                    compareILvl, compareHeirloom = oh, ohH
+                else
+                    compareILvl, compareHeirloom = mh, mhH
+                end
+                compareLabel = "best equipped weapon"
+            elseif not tokenEquipLoc and equipLoc == "INVTYPE_WEAPON" and ctx.mainHandTwoHand then
+                -- A lone one-hander can't join the empty off-hand beside a 2H;
+                -- equipping it means dropping the 2H. Compare against the 2H, not
+                -- the empty off-hand slot the worst-of rule would otherwise pick.
+                compareILvl, compareHeirloom = ctx.worstEquippedILvl("INVTYPE_WEAPONMAINHAND")
+                compareLabel = "two-handed weapon"
             else
                 -- Tier tokens redeem to gear with different names than the token
                 -- itself, so unique-equipped sibling matching doesn't apply when

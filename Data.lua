@@ -185,6 +185,20 @@ Data.EquipLocToSlots = {
     INVTYPE_RANGEDRIGHT     = { 16 },
 }
 
+-- Off-hand-*only* item slots: an off-hand weapon, a caster off-hand frill, or
+-- a shield can never share the hands with a two-hander, and no spec wields one
+-- without a main-hand 1H. So if the main hand holds a 2H, these are structurally
+-- unequippable in the *current* spec and must not read as a free upgrade over
+-- the empty off-hand slot (see Decision Step 8b). Shields are included: a player
+-- holding a 2H isn't in a shield-using configuration, so wanting one is an
+-- off-spec concern — and Decision only suppresses these on the main-spec branch,
+-- leaving off-spec shield/off-hand upgrades to the equipment-set comparison.
+Data.OffHandOnlyEquipLocs = {
+    INVTYPE_WEAPONOFFHAND = true,
+    INVTYPE_HOLDABLE      = true,
+    INVTYPE_SHIELD        = true,
+}
+
 -- Tier-token name prefix → equipLoc the token redeems for. Lets the decision
 -- engine compare a token's ilvl against the gear it would replace.
 Data.TierTokenSlotByName = {

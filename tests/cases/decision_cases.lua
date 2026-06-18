@@ -40,6 +40,54 @@ local SYNTH_SPIRIT_TRINKET = {
     stats = { ITEM_MOD_SPIRIT_SHORT = 847, ITEM_MOD_STAMINA_SHORT = 100 },
 }
 
+-- Caster off-hand frill (Int+Spirit), the shape of itemID 81076 "Bottle of
+-- Potent Potables". Holdable: armor, miscellaneous subclass.
+local SYNTH_OFFHAND_FRILL = {
+    name = "Bottle of Potent Potables (synthetic)", quality = 4, ilvl = 463,
+    itemType = "Armor", itemSubType = "Miscellaneous",
+    equipLoc = "INVTYPE_HOLDABLE", classID = 4, subclassID = 0,
+    stats = { ITEM_MOD_INTELLECT_SHORT = 200, ITEM_MOD_SPIRIT_SHORT = 150 },
+}
+
+-- Off-hand-only weapon (Str 1H sword), e.g. a fury warrior off-hand.
+local SYNTH_OFFHAND_WEAPON = {
+    name = "Offhand Cleaver (synthetic)", quality = 4, ilvl = 510,
+    itemType = "Weapon", itemSubType = "One-Handed Swords",
+    equipLoc = "INVTYPE_WEAPONOFFHAND", classID = 2, subclassID = 7,
+    stats = { ITEM_MOD_STRENGTH_SHORT = 200 },
+}
+
+-- Two-handed sword (Str), itemized for a warrior.
+local SYNTH_TWOHAND = {
+    name = "Greatsword (synthetic)", quality = 4, ilvl = 510,
+    itemType = "Weapon", itemSubType = "Two-Handed Swords",
+    equipLoc = "INVTYPE_2HWEAPON", classID = 2, subclassID = 8,
+    stats = { ITEM_MOD_STRENGTH_SHORT = 400 },
+}
+
+-- One-handed sword (Str), either hand.
+local SYNTH_ONEHAND = {
+    name = "Shortsword (synthetic)", quality = 4, ilvl = 510,
+    itemType = "Weapon", itemSubType = "One-Handed Swords",
+    equipLoc = "INVTYPE_WEAPON", classID = 2, subclassID = 7,
+    stats = { ITEM_MOD_STRENGTH_SHORT = 200 },
+}
+
+-- Shields (Str tank / Int caster). Off-hand-only, so they couple to a 2H the
+-- same way a frill does — but only on the main-spec branch.
+local SYNTH_SHIELD_STR = {
+    name = "Bulwark (synthetic)", quality = 4, ilvl = 510,
+    itemType = "Armor", itemSubType = "Shields",
+    equipLoc = "INVTYPE_SHIELD", classID = 4, subclassID = 6,
+    stats = { ITEM_MOD_STRENGTH_SHORT = 200 },
+}
+local SYNTH_SHIELD_INT = {
+    name = "Aegis (synthetic)", quality = 4, ilvl = 510,
+    itemType = "Armor", itemSubType = "Shields",
+    equipLoc = "INVTYPE_SHIELD", classID = 4, subclassID = 6,
+    stats = { ITEM_MOD_INTELLECT_SHORT = 200 },
+}
+
 -- 99678 with a name no tier-token slot pattern recognizes.
 local SYNTH_ODD_TOKEN = {
     name = "Mystery of the Cursed Conqueror", quality = 4, ilvl = 528,
@@ -271,4 +319,78 @@ return {
       cfg = { requireILvlUpgrade = true, nonUpgradeAction = "MANUAL" },
       ctx = { equipped = { INVTYPE_CHEST = 502 } },
       expect = { action = "MANUAL", rule = "DEFAULT" } },
+
+    -- ── Weapon hand-coupling ────────────────────────────────────────────
+
+    -- The reported bug: Holy Priest holding a 2H staff, an Int off-hand frill
+    -- drops. Stat-only default would Need it on the Int match; the gate blocks
+    -- it because you can't wear an off-hand beside a two-hander.
+    { name = "off-hand frill while holding a 2H: gated, not Needed (stat-only)",
+      item = 900010, synthetic = { [900010] = SYNTH_OFFHAND_FRILL },
+      ctx = { spec = 257, mainHandTwoHand = true },
+      expect = { action = "GREED", rule = "OFFHAND_VS_TWOHAND" } },
+
+    -- Same item with no 2H equipped (priest running 1H + off-hand): the gate
+    -- must NOT fire — a frill is a normal stat-match Need.
+    { name = "off-hand frill with no 2H equipped: normal stat-match Need",
+      item = 900010, synthetic = { [900010] = SYNTH_OFFHAND_FRILL },
+      ctx = { spec = 257 },
+      expect = { action = "NEED", rule = "STAT_MATCH_ANY_ILVL" } },
+
+    -- Off-hand-only weapon (a fury warrior on a 2H): same structural block.
+    { name = "off-hand weapon while holding a 2H: gated",
+      item = 900011, synthetic = { [900011] = SYNTH_OFFHAND_WEAPON },
+      ctx = { spec = 72, mainHandTwoHand = true },
+      expect = { action = "GREED", rule = "OFFHAND_VS_TWOHAND" } },
+
+    -- Mirror: a 2H dropping while dual-wielding compares against the BETTER of
+    -- the two equipped weapons (it displaces both). Beats the best → Need.
+    { name = "2H drop while dual-wielding: Needs when it beats the better weapon",
+      item = 900012, synthetic = { [900012] = SYNTH_TWOHAND },
+      cfg = { requireILvlUpgrade = true },
+      ctx = { spec = 72, equipped = { INVTYPE_WEAPONMAINHAND = 500,
+                                      INVTYPE_WEAPONOFFHAND = 490 } },
+      expect = { action = "NEED", rule = "UPGRADE" } },
+
+    -- ...but beating only the WORSE weapon is a downgrade of the main hand, so
+    -- it must not Need. (The "Need if better than one" option we rejected.)
+    { name = "2H drop while dual-wielding: no Need when it only beats the worse weapon",
+      item = 900013,
+      synthetic = { [900013] = (function() local t = {}; for k,v in pairs(SYNTH_TWOHAND) do t[k]=v end; t.ilvl = 495; return t end)() },
+      cfg = { requireILvlUpgrade = true },
+      ctx = { spec = 72, equipped = { INVTYPE_WEAPONMAINHAND = 500,
+                                      INVTYPE_WEAPONOFFHAND = 490 } },
+      expect = { action = "GREED", rule = "DEFAULT" } },
+
+    -- A lone 1H beside an equipped 2H compares against the 2H, not the empty
+    -- off-hand slot. Below the 2H's ilvl → no false upgrade.
+    { name = "1H drop while holding a 2H: compares against the 2H (no false upgrade)",
+      item = 900014,
+      synthetic = { [900014] = (function() local t = {}; for k,v in pairs(SYNTH_ONEHAND) do t[k]=v end; t.ilvl = 495; return t end)() },
+      cfg = { requireILvlUpgrade = true },
+      ctx = { spec = 72, mainHandTwoHand = true,
+              equipped = { INVTYPE_WEAPONMAINHAND = 500 } },
+      expect = { action = "GREED", rule = "DEFAULT" } },
+
+    -- ...and above the 2H's ilvl it's a real upgrade (you'd drop the 2H for it).
+    { name = "1H drop while holding a 2H: Needs when it beats the 2H",
+      item = 900015, synthetic = { [900015] = SYNTH_ONEHAND },
+      cfg = { requireILvlUpgrade = true },
+      ctx = { spec = 72, mainHandTwoHand = true,
+              equipped = { INVTYPE_WEAPONMAINHAND = 500 } },
+      expect = { action = "NEED", rule = "UPGRADE" } },
+
+    -- A shield matching the CURRENT (2H-wielding) spec is gated like a frill:
+    -- a Ret paladin on a 2H isn't tanking, so a Str shield isn't his upgrade.
+    { name = "shield matching main spec while holding a 2H: gated",
+      item = 900016, synthetic = { [900016] = SYNTH_SHIELD_STR },
+      ctx = { spec = 70, mainHandTwoHand = true },
+      expect = { action = "GREED", rule = "OFFHAND_VS_TWOHAND" } },
+
+    -- ...but a shield matching the OFF-spec stat must reach off-spec handling,
+    -- not the 2H gate — "switch to the shield spec for it" is a real upgrade.
+    { name = "shield matching off-spec stat while holding a 2H: routes to off-spec, not gated",
+      item = 900017, synthetic = { [900017] = SYNTH_SHIELD_INT },
+      ctx = { spec = 70, mainHandTwoHand = true, offspecPrimaryStat = 4 },
+      expect = { action = "NEED", rule = "STAT_MATCH_ANY_ILVL" } },
 }

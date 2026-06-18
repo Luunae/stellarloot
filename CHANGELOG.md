@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 — Stop Needing off-hand gear you can't wear with a two-hander
+
+**Fixed: an off-hand item no longer reads as a free upgrade while a two-hander is equipped.** A two-handed weapon fills only the main-hand slot and leaves the off-hand empty, so an incoming off-hand piece (caster off-hand frill, off-hand weapon, or shield) was comparing against *nothing* — ilvl 0, or, in the default stat-only mode, simply matching on primary stat with no comparison at all — and rolling **Need** on gear the player structurally cannot equip. Reported by a Holy Priest on a staff who got a Need on an Int off-hand frill (Bottle of Potent Potables, 81076) over a higher-ilvl two-hander. The decision engine now recognizes that main-hand 2H and off-hand are mutually exclusive: an off-hand-only item is suppressed (Greed by default, via `unusableAction`) **when it matches your current spec**. A piece that matches your *off-spec* stat still routes to the off-spec equipment-set comparison untouched — wielding a 2H means a shield is an off-spec concern, and that path owns it.
+
+**Fixed: weapon ilvl comparisons account for the 1H/2H trade.** A two-hander displaces *both* hands, so it now compares against the **better** of your two equipped weapons (it must beat the weapon you'd actually give up, not the worse one). A lone one-hander dropping while you hold a 2H compares against that 2H rather than the empty off-hand slot. Both only matter in `requireILvlUpgrade` mode; both close the same empty-slot blind spot the off-hand fix addresses.
+
+**Tests:** 9 new pins covering the gate (frill / off-hand weapon / shield while holding a 2H), the controls that prove it doesn't over-fire when actually running a 1H + off-hand, off-spec shield routing, and both directions of the 1H/2H ilvl trade. 56 curated cases + the exhaustive corpus sweep pass with zero divergences.
+
 ## 0.8.0 — Effect trinkets stop nagging; full disposition UI
 
 **Changed: effect-only trinkets Greed by default instead of leaving a Manual dialog.** 0.7.0 routed any trinket with no readable primary stat and no spec mapping to MANUAL, on the theory its value hides in Use:/Equip: effects the API won't surface. In practice that fired indiscriminately: a Protection Paladin running dungeons hit MANUAL on a caster Int-proc trinket (Flashfrozen Resin Globule, 81263) and a healer Spirit trinket (Empty Fruit Barrel, 81133) — items plainly not hers — reintroducing exactly the manual clicking StellarLoot exists to remove. Effect-trinket disposition is now governed by `unjudgeableTrinketAction` (MANUAL | GREED | PASS), defaulting to **GREED**. The cautious 0.7.0 behavior is one setting away; the default keeps SL grabby in dungeons, where precision is SLFG's job, not SL's.
